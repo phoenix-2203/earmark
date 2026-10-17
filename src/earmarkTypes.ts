@@ -50,6 +50,9 @@ export function friendlyError(err: unknown): string {
   const msg = String(err).toLowerCase()
 
   if (msg.includes('zeroadd')) return 'Address cannot be zero.'
+  if (msg.includes('zeroamount')) return 'Amount must be greater than zero.'
+  if (msg.includes('selfbeneficiary')) return 'You cannot create a pot for yourself.'
+  if (msg.includes('toomanypending')) return 'Too many pending payee requests — wait for the sender to resolve some first.'
   if (msg.includes('invalidexpiry')) return 'The end date must be in the future.'
   if (msg.includes('potclosed')) return 'This pot is already closed.'
   if (msg.includes('potexpired')) return 'This pot has expired — no more payments are possible.'

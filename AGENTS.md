@@ -44,7 +44,7 @@ Send money home for a specific purpose. The contract enforces that:
 
 | Network | Address | Explorer |
 |---------|---------|---------|
-| Arc Testnet | 0x14ed9bb0b0a569aa895dfe5776310f9e73f014cc | https://explorer.testnet.arc.io/address/0x14ed9bb0b0a569aa895dfe5776310f9e73f014cc |
+| Arc Testnet | 0x7d5b050e1c3fd772cacc1e59d3381b5c30b9d566 | https://explorer.testnet.arc.io/address/0x7d5b050e1c3fd772cacc1e59d3381b5c30b9d566 |
 | Arc Mainnet | (not yet deployed) | https://explorer.arc.io |
 
 ## Environment Variables

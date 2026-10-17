@@ -46,6 +46,8 @@ contract Earmark is ReentrancyGuard {
     }
 
     error ZeroAddress();
+    error ZeroAmount();
+    error SelfBeneficiary();
     error InvalidExpiry();
     error PotClosed();
     error PotExpired();
@@ -58,6 +60,7 @@ contract Earmark is ReentrancyGuard {
     error BeneficiaryCannotBePayee();
     error ContractCannotBePayee();
     error MaxPayeesReached();
+    error TooManyPendingRequests();
     error TitleTooLong();
     error LabelTooLong();
     error MemoTooLong();
@@ -115,6 +118,7 @@ contract Earmark is ReentrancyGuard {
     mapping(uint256 => mapping(address => string)) internal _payeeLabel;
     mapping(uint256 => Payment[]) internal _payments;
     mapping(uint256 => PayeeRequest[]) internal _payeeRequests;
+    mapping(uint256 => uint256) internal _pendingRequestCount;
     mapping(address => uint256[]) internal _senderPots;
     mapping(address => uint256[]) internal _beneficiaryPots;
 
@@ -135,6 +139,8 @@ contract Earmark is ReentrancyGuard {
         string[] calldata payeeLabels
     ) external nonReentrant returns (uint256 potId) {
         if (beneficiary == address(0)) revert ZeroAddress();
+        if (beneficiary == msg.sender) revert SelfBeneficiary();
+        if (amount == 0) revert ZeroAmount();
         if (expiry <= block.timestamp) revert InvalidExpiry();
         if (bytes(title).length > MAX_TITLE_BYTES) revert TitleTooLong();
         if (payees.length == 0) revert AtLeastOnePayee();
@@ -167,6 +173,7 @@ contract Earmark is ReentrancyGuard {
     }
 
     function topUp(uint256 potId, uint256 amount) external nonReentrant {
+        if (amount == 0) revert ZeroAmount();
         Pot storage pot = pots[potId];
         _requireSender(pot);
         _requireOpen(pot);
@@ -221,9 +228,13 @@ contract Earmark is ReentrancyGuard {
         _requireBeneficiary(pot);
         _requireOpen(pot);
 
+        if (_isApprovedPayee[potId][payee]) revert AlreadyApprovedPayee();
+        if (_pendingRequestCount[potId] >= 10) revert TooManyPendingRequests();
         if (bytes(label).length > MAX_LABEL_BYTES) revert LabelTooLong();
         if (bytes(reason).length > MAX_REASON_BYTES) revert ReasonTooLong();
         _validatePayee(pot.sender, pot.beneficiary, payee);
+
+        _pendingRequestCount[potId] += 1;
 
         uint256 requestId = _payeeRequests[potId].length;
         _payeeRequests[potId].push(
@@ -247,6 +258,7 @@ contract Earmark is ReentrancyGuard {
 
         req.resolved = true;
         req.approved = true;
+        _pendingRequestCount[potId] -= 1;
 
         _isApprovedPayee[potId][req.payee] = true;
         _payeeLabel[potId][req.payee] = req.label;
@@ -266,11 +278,13 @@ contract Earmark is ReentrancyGuard {
 
         req.resolved = true;
         req.approved = false;
+        _pendingRequestCount[potId] -= 1;
 
         emit PayeeRequestRejected(potId, requestId, req.payee);
     }
 
     function pay(uint256 potId, address payee, uint256 amount, string calldata memo) external nonReentrant {
+        if (amount == 0) revert ZeroAmount();
         Pot storage pot = pots[potId];
         _requireParticipant(pot);
         _requireOpen(pot);
@@ -363,6 +377,10 @@ contract Earmark is ReentrancyGuard {
 
     function getPayeeRequests(uint256 potId) external view returns (PayeeRequest[] memory) {
         return _payeeRequests[potId];
+    }
+
+    function pendingRequestCount(uint256 potId) external view returns (uint256) {
+        return _pendingRequestCount[potId];
     }
 
     function _requireSender(Pot storage pot) internal view {

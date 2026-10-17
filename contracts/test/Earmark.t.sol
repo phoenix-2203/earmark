@@ -845,7 +845,7 @@ contract EarmarkTest is Test {
     // Fuzz: createPot amount round-trip (balance check)
     // -----------------------------------------------------------------------
     function testFuzz_CreatePot_BalanceRoundTrip(uint256 amount) public {
-        amount = bound(amount, 0, 10_000_000e6);
+        amount = bound(amount, 1, 10_000_000e6); // 0 is now rejected (ZeroAmount)
 
         // Make sure sender has enough
         usdc.mint(sender, amount);
@@ -1050,5 +1050,165 @@ contract EarmarkTest is Test {
         assertEq(earmark.potCount(), 1);
         _createPot(INITIAL_AMOUNT);
         assertEq(earmark.potCount(), 2);
+    }
+
+    // -----------------------------------------------------------------------
+    // NEW 1. createPot reverts ZeroAmount when amount == 0
+    // -----------------------------------------------------------------------
+    function test_CreatePot_RevertZeroAmount() public {
+        address[] memory payees      = new address[](1);
+        string[]  memory payeeLabels = new string[](1);
+        payees[0]      = alice;
+        payeeLabels[0] = "Alice";
+
+        vm.prank(sender);
+        vm.expectRevert(Earmark.ZeroAmount.selector);
+        earmark.createPot(
+            beneficiary,
+            "Zero Pot",
+            Earmark.Category.Other,
+            0,
+            block.timestamp + FUTURE_EXPIRY,
+            payees,
+            payeeLabels
+        );
+    }
+
+    // -----------------------------------------------------------------------
+    // NEW 2. createPot reverts SelfBeneficiary when beneficiary == msg.sender
+    // -----------------------------------------------------------------------
+    function test_CreatePot_RevertSelfBeneficiary() public {
+        address[] memory payees      = new address[](1);
+        string[]  memory payeeLabels = new string[](1);
+        payees[0]      = alice;
+        payeeLabels[0] = "Alice";
+
+        vm.prank(sender);
+        vm.expectRevert(Earmark.SelfBeneficiary.selector);
+        earmark.createPot(
+            sender,          // beneficiary == msg.sender
+            "Self Pot",
+            Earmark.Category.Other,
+            INITIAL_AMOUNT,
+            block.timestamp + FUTURE_EXPIRY,
+            payees,
+            payeeLabels
+        );
+    }
+
+    // -----------------------------------------------------------------------
+    // NEW 3. topUp reverts ZeroAmount when amount == 0
+    // -----------------------------------------------------------------------
+    function test_TopUp_RevertZeroAmount() public {
+        uint256 potId = _createPot(INITIAL_AMOUNT);
+
+        vm.prank(sender);
+        vm.expectRevert(Earmark.ZeroAmount.selector);
+        earmark.topUp(potId, 0);
+    }
+
+    // -----------------------------------------------------------------------
+    // NEW 4. pay reverts ZeroAmount when amount == 0
+    // -----------------------------------------------------------------------
+    function test_Pay_RevertZeroAmount() public {
+        uint256 potId = _createPot(INITIAL_AMOUNT);
+
+        vm.prank(sender);
+        vm.expectRevert(Earmark.ZeroAmount.selector);
+        earmark.pay(potId, alice, 0, "zero");
+    }
+
+    // -----------------------------------------------------------------------
+    // NEW 5. requestPayee reverts AlreadyApprovedPayee if payee already approved
+    // -----------------------------------------------------------------------
+    function test_RequestPayee_RevertAlreadyApprovedPayee() public {
+        // alice is approved at pot creation
+        uint256 potId = _createPot(INITIAL_AMOUNT);
+
+        vm.prank(beneficiary);
+        vm.expectRevert(Earmark.AlreadyApprovedPayee.selector);
+        earmark.requestPayee(potId, alice, "Alice again", "already in");
+    }
+
+    // -----------------------------------------------------------------------
+    // NEW 6. requestPayee reverts TooManyPendingRequests after 10 unresolved
+    // -----------------------------------------------------------------------
+    function test_RequestPayee_RevertTooManyPendingRequests() public {
+        uint256 potId = _createPot(INITIAL_AMOUNT);
+
+        // Submit 10 requests for 10 distinct payees (none resolved)
+        for (uint256 i = 0; i < 10; ++i) {
+            address pendingPayee = makeAddr(string(abi.encodePacked("pending", i)));
+            vm.prank(beneficiary);
+            earmark.requestPayee(potId, pendingPayee, "label", "reason");
+        }
+
+        // 11th request must revert
+        address eleventhPayee = makeAddr("eleventh");
+        vm.prank(beneficiary);
+        vm.expectRevert(Earmark.TooManyPendingRequests.selector);
+        earmark.requestPayee(potId, eleventhPayee, "label", "reason");
+    }
+
+    // -----------------------------------------------------------------------
+    // NEW 7. pendingRequestCount increments on requestPayee and decrements on approvePayeeRequest
+    // -----------------------------------------------------------------------
+    function test_PendingRequestCount_IncrementOnRequest_DecrementOnApprove() public {
+        uint256 potId = _createPot(INITIAL_AMOUNT);
+
+        assertEq(earmark.pendingRequestCount(potId), 0, "should start at zero");
+
+        vm.prank(beneficiary);
+        earmark.requestPayee(potId, bob, "Bob", "reason");
+        assertEq(earmark.pendingRequestCount(potId), 1, "should be 1 after request");
+
+        vm.prank(sender);
+        earmark.approvePayeeRequest(potId, 0);
+        assertEq(earmark.pendingRequestCount(potId), 0, "should be 0 after approve");
+    }
+
+    // -----------------------------------------------------------------------
+    // NEW 8. pendingRequestCount increments on requestPayee and decrements on rejectPayeeRequest
+    // -----------------------------------------------------------------------
+    function test_PendingRequestCount_IncrementOnRequest_DecrementOnReject() public {
+        uint256 potId = _createPot(INITIAL_AMOUNT);
+
+        assertEq(earmark.pendingRequestCount(potId), 0, "should start at zero");
+
+        vm.prank(beneficiary);
+        earmark.requestPayee(potId, bob, "Bob", "reason");
+        assertEq(earmark.pendingRequestCount(potId), 1, "should be 1 after request");
+
+        vm.prank(sender);
+        earmark.rejectPayeeRequest(potId, 0);
+        assertEq(earmark.pendingRequestCount(potId), 0, "should be 0 after reject");
+    }
+
+    // -----------------------------------------------------------------------
+    // NEW 9. After one request is approved, a new request for a different payee
+    //        can be submitted (approved request freed a slot in the counter)
+    // -----------------------------------------------------------------------
+    function test_RequestPayee_SlotFreedAfterApproval() public {
+        uint256 potId = _createPot(INITIAL_AMOUNT);
+
+        // Fill all 10 slots with unique payees
+        address[10] memory pendingPayees;
+        for (uint256 i = 0; i < 10; ++i) {
+            pendingPayees[i] = makeAddr(string(abi.encodePacked("slot", i)));
+            vm.prank(beneficiary);
+            earmark.requestPayee(potId, pendingPayees[i], "label", "reason");
+        }
+        assertEq(earmark.pendingRequestCount(potId), 10, "counter should be at cap");
+
+        // Approve request 0 — decrements counter to 9
+        vm.prank(sender);
+        earmark.approvePayeeRequest(potId, 0);
+        assertEq(earmark.pendingRequestCount(potId), 9, "counter should drop to 9 after approval");
+
+        // Now a new request for a fresh payee must succeed (counter was freed)
+        address freshPayee = makeAddr("freshPayee");
+        vm.prank(beneficiary);
+        earmark.requestPayee(potId, freshPayee, "fresh label", "fresh reason");
+        assertEq(earmark.pendingRequestCount(potId), 10, "counter should be back at 10");
     }
 }

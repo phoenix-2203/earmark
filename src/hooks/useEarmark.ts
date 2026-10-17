@@ -1,6 +1,8 @@
 /**
  * Core hooks for reading Earmark contract state.
  * All reads specify chainId so they query Arc even when the wallet is on another chain.
+ * refetchInterval: 30 s — live enough for UX, gentle on the public RPC.
+ * staleTime: 20 s — prevents a redundant re-fetch on every re-render.
  */
 
 import { useReadContract, useReadContracts } from 'wagmi'
@@ -8,6 +10,9 @@ import { EARMARK_ADDRESS, EARMARK_ABI, EARMARK_CHAIN_ID } from '@/earmarkConfig'
 import type { Pot, Payment, PayeeRequest, PayeeEntry } from '@/earmarkTypes'
 
 const base = { address: EARMARK_ADDRESS, abi: EARMARK_ABI, chainId: EARMARK_CHAIN_ID } as const
+
+// Shared query options — 30 s refetch, 20 s stale window
+const POLL = { refetchInterval: 30_000, staleTime: 20_000 } as const
 
 function hasAddress() {
   return EARMARK_ADDRESS.length > 2
@@ -18,7 +23,7 @@ export function usePot(potId: bigint | undefined) {
     ...base,
     functionName: 'getPot',
     args: potId !== undefined ? [potId] : undefined,
-    query: { enabled: hasAddress() && potId !== undefined },
+    query: { enabled: hasAddress() && potId !== undefined, ...POLL },
   })
 }
 
@@ -27,7 +32,7 @@ export function usePotsOfSender(address: `0x${string}` | undefined) {
     ...base,
     functionName: 'potsOfSender',
     args: address ? [address] : undefined,
-    query: { enabled: hasAddress() && !!address },
+    query: { enabled: hasAddress() && !!address, ...POLL },
   })
 }
 
@@ -36,7 +41,7 @@ export function usePotsOfBeneficiary(address: `0x${string}` | undefined) {
     ...base,
     functionName: 'potsOfBeneficiary',
     args: address ? [address] : undefined,
-    query: { enabled: hasAddress() && !!address },
+    query: { enabled: hasAddress() && !!address, ...POLL },
   })
 }
 
@@ -50,7 +55,7 @@ export function usePayees(potId: bigint | undefined): {
     ...base,
     functionName: 'getPayees',
     args: potId !== undefined ? [potId] : undefined,
-    query: { enabled: hasAddress() && potId !== undefined },
+    query: { enabled: hasAddress() && potId !== undefined, ...POLL },
   })
 
   const data: PayeeEntry[] | undefined =
@@ -74,7 +79,7 @@ export function usePayments(potId: bigint | undefined): {
     ...base,
     functionName: 'getPayments',
     args: potId !== undefined ? [potId] : undefined,
-    query: { enabled: hasAddress() && potId !== undefined },
+    query: { enabled: hasAddress() && potId !== undefined, ...POLL },
   })
 
   return {
@@ -94,7 +99,7 @@ export function usePayeeRequests(potId: bigint | undefined): {
     ...base,
     functionName: 'getPayeeRequests',
     args: potId !== undefined ? [potId] : undefined,
-    query: { enabled: hasAddress() && potId !== undefined },
+    query: { enabled: hasAddress() && potId !== undefined, ...POLL },
   })
 
   return {
@@ -117,10 +122,9 @@ export function useMultiplePots(potIds: bigint[]): {
 
   const result = useReadContracts({
     contracts,
-    query: { enabled: hasAddress() && potIds.length > 0 },
+    query: { enabled: hasAddress() && potIds.length > 0, ...POLL },
   })
 
-  const pots = result.data?.map((r) => (r.status === 'success' ? (r.result) : undefined))
-
-  return { pots: pots ?? [], isLoading: result.isLoading }
+  const pots = result.data?.map((r) => r.result) ?? potIds.map(() => undefined)
+  return { pots, isLoading: result.isLoading }
 }

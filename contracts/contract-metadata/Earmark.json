@@ -1,13 +1,20 @@
 {
-  "contractAddress": "0x14ed9bb0b0a569aa895dfe5776310f9e73f014cc",
+  "contractAddress": "0x7d5b050e1c3fd772cacc1e59d3381b5c30b9d566",
   "network": "ARC-TESTNET",
   "deployerWalletId": "3c2464b2-8369-52e2-a782-800bbeca5396",
   "contract_code_path": "/home/user/app/contracts/Earmark.sol",
   "contract_compiled_code_path": "/home/user/app/contracts/out/Earmark.sol/Earmark.json",
   "contract_network_and_links": {
-    "Arc Testnet": "https://explorer.testnet.arc.io/address/0x14ed9bb0b0a569aa895dfe5776310f9e73f014cc"
+    "Arc Testnet": "https://explorer.testnet.arc.io/address/0x7d5b050e1c3fd772cacc1e59d3381b5c30b9d566"
   },
   "contract_deployments": [
+    {
+      "chain": "Arc Testnet",
+      "address": "0x7d5b050e1c3fd772cacc1e59d3381b5c30b9d566",
+      "explorerUrl": "https://explorer.testnet.arc.io/address/0x7d5b050e1c3fd772cacc1e59d3381b5c30b9d566",
+      "txHash": "0x63e6743fc2e0e94ecd4c37d8a7ce12742a8861f4f09dbc6dd02f3aeddc3202db",
+      "deployedAt": "2026-10-17T23:38:59.577Z"
+    },
     {
       "chain": "Arc Testnet",
       "address": "0x14ed9bb0b0a569aa895dfe5776310f9e73f014cc",
@@ -350,6 +357,25 @@
       ],
       "outputs": [],
       "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "pendingRequestCount",
+      "inputs": [
+        {
+          "name": "potId",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ],
+      "stateMutability": "view"
     },
     {
       "type": "function",
@@ -1023,6 +1049,11 @@
     },
     {
       "type": "error",
+      "name": "SelfBeneficiary",
+      "inputs": []
+    },
+    {
+      "type": "error",
       "name": "SenderCannotBePayee",
       "inputs": []
     },
@@ -1033,7 +1064,17 @@
     },
     {
       "type": "error",
+      "name": "TooManyPendingRequests",
+      "inputs": []
+    },
+    {
+      "type": "error",
       "name": "ZeroAddress",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "ZeroAmount",
       "inputs": []
     }
   ]

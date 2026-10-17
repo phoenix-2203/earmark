@@ -24,9 +24,11 @@ const glass = {
 
 interface Props {
   onBack: () => void
+  onViewPot: (potId: bigint) => void
+  onReceipt: (potId: bigint, index: number) => void
 }
 
-export default function ForMePage({ onBack }: Props) {
+export default function ForMePage({ onBack, onViewPot, onReceipt: _onReceipt }: Props) {
   const { address } = useAccount()
   const { data: potIds, isLoading: idsLoading } = usePotsOfBeneficiary(address)
   const ids: bigint[] = (potIds as bigint[] | undefined) ?? []
@@ -59,7 +61,14 @@ export default function ForMePage({ onBack }: Props) {
         ) : (
           <div className="space-y-4">
             {pots.map((pot, i) =>
-              pot ? <BeneficiaryPotCard key={pot.id.toString()} pot={pot} potId={ids[i]} /> : null
+              pot ? (
+                <BeneficiaryPotCard
+                  key={pot.id.toString()}
+                  pot={pot}
+                  potId={ids[i]}
+                  onViewPot={onViewPot}
+                />
+              ) : null
             )}
           </div>
         )}
@@ -71,9 +80,11 @@ export default function ForMePage({ onBack }: Props) {
 function BeneficiaryPotCard({
   pot,
   potId,
+  onViewPot,
 }: {
   pot: NonNullable<ReturnType<typeof useMultiplePots>['pots'][number]>
   potId: bigint
+  onViewPot: (potId: bigint) => void
 }) {
   const [showPay, setShowPay] = useState(false)
   const [showRequest, setShowRequest] = useState(false)
@@ -97,6 +108,13 @@ function BeneficiaryPotCard({
             <p className="text-xs" style={{ color: 'var(--muted)' }}>
               From {shortAddr(pot.sender)} · expires {formatDate(pot.expiry)}
             </p>
+            <button
+              onClick={() => onViewPot(potId)}
+              className="text-xs font-semibold"
+              style={{ color: 'var(--accent-hover)' }}
+            >
+              View pot page →
+            </button>
           </div>
         </div>
 

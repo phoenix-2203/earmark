@@ -14,6 +14,7 @@ Earmark is a purpose-locked USDC remittance app built on Arc. A sender abroad fu
 - **Sender-controlled payees** — only the sender can approve payees; beneficiary can request new ones
 - **Core guarantee** — neither the sender nor the beneficiary can be a payee (no self-payment ever)
 - **On-chain receipts** — every payment stores the payee, amount, memo, timestamp, and payer; shareable at `/receipt/:potId/:paymentIndex`
+- **Public pot page** — anyone can verify a pot's full history at `/pot/:potId` without connecting a wallet
 - **Full lifecycle** — top up, extend expiry, release early to beneficiary, or reclaim after expiry
 - **Testnet + mainnet** — Arc Testnet for testing, Arc Mainnet for production
 

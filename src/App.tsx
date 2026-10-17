@@ -7,9 +7,10 @@ import CreatePotPage from '@/pages/CreatePotPage'
 import MyPotsPage from '@/pages/MyPotsPage'
 import ForMePage from '@/pages/ForMePage'
 import ReceiptPage from '@/pages/ReceiptPage'
+import PotPage from '@/pages/PotPage'
 import { EARMARK_CHAIN, EARMARK_ADDRESS } from '@/earmarkConfig'
 
-type Page = 'home' | 'create' | 'my-pots' | 'for-me' | 'receipt'
+type Page = 'home' | 'create' | 'my-pots' | 'for-me' | 'receipt' | 'pot'
 
 interface Route {
   page: Page
@@ -18,14 +19,14 @@ interface Route {
 }
 
 function parseRoute(): Route {
-  const path = window.location.pathname
-  const receiptMatch = path.match(/^\/receipt\/(\d+)\/(\d+)$/)
+  const hash = window.location.hash.replace(/^#/, '') || window.location.pathname
+  const receiptMatch = hash.match(/^\/receipt\/(\d+)\/(\d+)$/)
   if (receiptMatch) {
-    return {
-      page: 'receipt',
-      potId: BigInt(receiptMatch[1]),
-      paymentIndex: parseInt(receiptMatch[2], 10),
-    }
+    return { page: 'receipt', potId: BigInt(receiptMatch[1]), paymentIndex: parseInt(receiptMatch[2], 10) }
+  }
+  const potMatch = hash.match(/^\/pot\/(\d+)$/)
+  if (potMatch) {
+    return { page: 'pot', potId: BigInt(potMatch[1]) }
   }
   return { page: 'home' }
 }
@@ -38,7 +39,9 @@ export default function App() {
     const r: Route = { page, potId, paymentIndex }
     setRoute(r)
     if (page === 'receipt' && potId !== undefined && paymentIndex !== undefined) {
-      window.history.pushState(null, '', `/receipt/${potId}/${paymentIndex}`)
+      window.history.pushState(null, '', `#/receipt/${potId}/${paymentIndex}`)
+    } else if (page === 'pot' && potId !== undefined) {
+      window.history.pushState(null, '', `#/pot/${potId}`)
     } else {
       window.history.pushState(null, '', '/')
     }
@@ -54,8 +57,8 @@ export default function App() {
 
   return (
     <div className="relative min-h-dvh" style={{ background: 'var(--bg-gradient)' }}>
-      {/* Top bar — shown on all pages except receipt */}
-      {route.page !== 'receipt' && (
+      {/* Top bar — shown on all pages except receipt and public pot page */}
+      {route.page !== 'receipt' && route.page !== 'pot' && (
         <header
           className="sticky top-0 z-40 flex items-center justify-between px-4 py-3"
           style={{
@@ -79,14 +82,14 @@ export default function App() {
       )}
 
       {/* Network banner */}
-      {route.page !== 'receipt' && (
+      {route.page !== 'receipt' && route.page !== 'pot' && (
         <div className="pt-2">
           <NetworkGuard />
         </div>
       )}
 
       {/* Contract not deployed notice */}
-      {noContract && route.page !== 'receipt' && route.page !== 'home' && (
+      {noContract && route.page !== 'receipt' && route.page !== 'pot' && route.page !== 'home' && (
         <div className="mx-4 mb-4 rounded-2xl p-4 text-sm" style={{ background: 'rgba(186,43,76,0.08)', color: 'var(--danger)', border: '1px solid rgba(186,43,76,0.2)' }}>
           The Earmark contract is not yet deployed. Set <code className="mono">VITE_EARMARK_ADDRESS</code> in <code className="mono">.env</code> after deploying.
         </div>
@@ -107,13 +110,28 @@ export default function App() {
         />
       )}
       {route.page === 'my-pots' && (
-        <MyPotsPage onBack={() => navigate('home')} />
+        <MyPotsPage
+          onBack={() => navigate('home')}
+          onViewPot={(potId) => navigate('pot', potId)}
+          onReceipt={(potId, index) => navigate('receipt', potId, index)}
+        />
       )}
       {route.page === 'for-me' && (
-        <ForMePage onBack={() => navigate('home')} />
+        <ForMePage
+          onBack={() => navigate('home')}
+          onViewPot={(potId) => navigate('pot', potId)}
+          onReceipt={(potId, index) => navigate('receipt', potId, index)}
+        />
       )}
       {route.page === 'receipt' && route.potId !== undefined && route.paymentIndex !== undefined && (
         <ReceiptPage potId={route.potId} paymentIndex={route.paymentIndex} />
+      )}
+      {route.page === 'pot' && route.potId !== undefined && (
+        <PotPage
+          potId={route.potId}
+          onBack={() => navigate('home')}
+          onReceipt={(potId, index) => navigate('receipt', potId, index)}
+        />
       )}
 
       {/* Footer — home page only */}

@@ -28,9 +28,11 @@ const glass = {
 
 interface Props {
   onBack: () => void
+  onViewPot: (potId: bigint) => void
+  onReceipt: (potId: bigint, index: number) => void
 }
 
-export default function MyPotsPage({ onBack }: Props) {
+export default function MyPotsPage({ onBack, onViewPot, onReceipt }: Props) {
   const { address } = useAccount()
   const { data: potIds, isLoading: idsLoading } = usePotsOfSender(address)
   const ids: bigint[] = (potIds as bigint[] | undefined) ?? []
@@ -63,7 +65,15 @@ export default function MyPotsPage({ onBack }: Props) {
         ) : (
           <div className="space-y-4">
             {pots.map((pot, i) =>
-              pot ? <PotCard key={pot.id.toString()} pot={pot} potId={ids[i]} /> : null
+              pot ? (
+                <PotCard
+                  key={pot.id.toString()}
+                  pot={pot}
+                  potId={ids[i]}
+                  onViewPot={onViewPot}
+                  onReceipt={onReceipt}
+                />
+              ) : null
             )}
           </div>
         )}
@@ -72,7 +82,7 @@ export default function MyPotsPage({ onBack }: Props) {
   )
 }
 
-function PotCard({ pot, potId }: { pot: NonNullable<ReturnType<typeof useMultiplePots>['pots'][number]>; potId: bigint }) {
+function PotCard({ pot, potId, onViewPot, onReceipt: _onReceipt }: { pot: NonNullable<ReturnType<typeof useMultiplePots>['pots'][number]>; potId: bigint; onViewPot: (potId: bigint) => void; onReceipt: (potId: bigint, index: number) => void }) {
   const [open, setOpen] = useState(false)
   const [showTopUp, setShowTopUp] = useState(false)
   const [showExtend, setShowExtend] = useState(false)
@@ -105,6 +115,17 @@ function PotCard({ pot, potId }: { pot: NonNullable<ReturnType<typeof useMultipl
           <ChevronDown className="mt-1 size-4 shrink-0" style={{ color: 'var(--subtle)' }} />
         )}
       </button>
+
+      {/* View pot link */}
+      <div className="px-5 pb-1">
+        <button
+          onClick={() => onViewPot(potId)}
+          className="text-xs font-semibold"
+          style={{ color: 'var(--accent-hover)' }}
+        >
+          View pot page →
+        </button>
+      </div>
 
       <div className="px-5 pb-2">
         <PotProgress pot={pot} />
