@@ -1,0 +1,39 @@
+# Environment & secrets — NEVER commit
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*.p12
+*.pfx
+recovery_file*
+.circle/
+
+# Node / Bun
+node_modules/
+.bun/
+bun.lock
+
+# Vite build output
+dist/
+dist-ssr/
+
+# Foundry build artifacts
+contracts/out/
+contracts/cache/
+
+# OS & editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+*.log
+/tmp/
+
+# Test coverage
+coverage/
+lcov.info
