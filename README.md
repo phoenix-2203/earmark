@@ -1,179 +1,116 @@
 # Earmark
 
-> Send money home for a reason. It can only be spent on that reason.
+> Built with Arc Studio — money-powered apps in minutes
 
-Earmark is a purpose-locked USDC remittance app built on Arc. A sender abroad funds a "pot" for a family member (the beneficiary) with a specific purpose like "School fees — Term 1". The beneficiary can only pay from the pot to wallet addresses the sender has approved (e.g. the school, the landlord, the clinic). Every payment is stored on-chain with a memo, so anyone can verify exactly where the money went.
+**Earmark** is a purpose-locked USDC remittance app. A sender funds a "pot" (money set aside for one purpose) for a family member; the family member can only pay to sender-approved payees (schools, landlords, clinics). Every payment is recorded on-chain with a public receipt.
 
-**Problem it solves:** money sent home for school fees, rent or medical bills is often diverted or requested by scammers. Earmark enforces the purpose at the smart contract level, not with trust.
-
----
-
-## Features
-
-- **Purpose-locked pots** — each pot has a title, category, beneficiary, end date, and approved payees
-- **Sender-controlled payees** — only the sender can approve payees; beneficiary can request new ones
-- **Core guarantee** — neither the sender nor the beneficiary can be a payee (no self-payment ever)
-- **On-chain receipts** — every payment stores the payee, amount, memo, timestamp, and payer; shareable at `/receipt/:potId/:paymentIndex`
-- **Public pot page** — anyone can verify a pot's full history at `/pot/:potId` without connecting a wallet
-- **Full lifecycle** — top up, extend expiry, release early to beneficiary, or reclaim after expiry
-- **Testnet + mainnet** — Arc Testnet for testing, Arc Mainnet for production
+**The contract only lets a pot pay addresses the sender approved. Earmark can't verify who owns an address — get the school's or landlord's wallet directly from them before adding it as a payee.**
 
 ---
 
-## Prerequisites
+## What Earmark does and doesn't do
 
-- [Bun](https://bun.sh) — package manager and runtime
-- [Foundry](https://book.getfoundry.sh/getting-started/installation) — `forge`, `cast`
-- MetaMask, Rabby, or any injected EVM wallet
+**Does:**
+- Only lets the pot pay addresses you approved
+- Records every payment on Arc with a memo and a public receipt
+- Returns unspent money to you after the end date
+
+**Doesn't:**
+- Verify who owns an address (the sender must confirm this)
+- Reverse a confirmed payment
+- Work with tokens other than USDC
 
 ---
 
-## Run locally
+## Tech stack
+
+- Frontend: React 18, Vite, TypeScript, Tailwind CSS v3, IBM Plex Sans/Mono
+- Web3: wagmi v2, viem, ConnectKit
+- Contracts: Solidity 0.8.28 + Foundry
+- Wallet: injected (MetaMask, Rabby, etc.)
+- Default chain: Arc Testnet (Chain ID 5042002)
+- Mainnet chain: Arc Mainnet (Chain ID 5042)
+- Token: USDC (6 decimals), address `0x3600000000000000000000000000000000000000` (same on both networks)
+
+---
+
+## Key files
+
+| File | Description |
+|---|---|
+| `src/App.tsx` | SPA hash router and app shell |
+| `src/earmarkConfig.ts` | Network/contract config (driven by `VITE_NETWORK`) |
+| `src/earmarkTypes.ts` | Shared types and friendly error messages (switch on error name) |
+| `src/hooks/useEarmark.ts` | wagmi read hooks (30 s refetch interval) |
+| `src/hooks/useContractAction.ts` | Shared write hook: idle → checking → awaitingSignature → submitted → confirmed/failed |
+| `src/hooks/useEventTxHash.ts` | Chunked event log scan for Paid and PotCreated tx hashes |
+| `src/pages/HomePage.tsx` | Landing page |
+| `src/pages/CreatePotPage.tsx` | Create pot (with allowance check, 2-step indicator, local-tz expiry) |
+| `src/pages/MyPotsPage.tsx` | Compact list of pots I sent |
+| `src/pages/ForMePage.tsx` | Compact list of pots for me |
+| `src/pages/PotPage.tsx` | Role-aware pot detail page (public + sender + beneficiary panels) |
+| `src/pages/ReceiptPage.tsx` | Public payment receipt |
+| `src/pages/HowItWorksPage.tsx` | Glossary, 3-step walkthrough, FAQs |
+| `src/components/ui/` | Design system components: Button, Field, Card, StatusBadge, AddressChip, AddressInput, AmountInput, Dialog, Stepper, EmptyState, TxStatus |
+| `src/utils/format.ts` | USDC formatting, address checksum, date/tz helpers |
+| `contracts/Earmark.sol` | Smart contract |
+| `contracts/test/Earmark.t.sol` | 61 Foundry tests (all passing) |
+
+---
+
+## Routes (hash-based)
+
+| Hash | Page |
+|---|---|
+| `#/` | Home |
+| `#/send` | Create a pot |
+| `#/sent` | Pots I sent |
+| `#/received` | Pots for me |
+| `#/pot/:id` | Pot detail (public, no wallet needed) |
+| `#/receipt/:potId/:index` | Payment receipt (public, no wallet needed) |
+| `#/how` | How it works |
+
+Old path-style URLs (`/pot/:id`, `/receipt/:a/:b`) still resolve (the server falls back to `index.html`).
+
+---
+
+## Contract deployments
+
+| Network | Address | Explorer |
+|---|---|---|
+| Arc Testnet | `0x7d5b050e1c3fd772cacc1e59d3381b5c30b9d566` | https://explorer.testnet.arc.io/address/0x7d5b050e1c3fd772cacc1e59d3381b5c30b9d566 |
+| Arc Mainnet | (not yet deployed) | https://explorer.arc.io |
+
+---
+
+## Environment variables
+
+```
+VITE_NETWORK=testnet                      # or mainnet
+VITE_EARMARK_ADDRESS=0x...               # deployed contract address
+VITE_EARMARK_FROM_BLOCK=0                # deployment block for event log scans
+```
+
+---
+
+## Running locally
 
 ```bash
 bun install
 bun run dev
 ```
 
-Open http://localhost:5173. The app targets Arc Testnet by default.
-
----
-
-## Run tests
+## Building
 
 ```bash
-# Build the contract
-bun run contracts:build   # or: cd contracts && forge build
-
-# Run all 52 unit tests
-bun run contracts:test    # or: forge test --match-path "contracts/test/*"
-```
-
-All 52 tests pass. Coverage includes: createPot, pay, reclaim, releaseToBeneficiary, topUp, extendExpiry, addPayee, removePayee, requestPayee, approvePayeeRequest, rejectPayeeRequest, balance invariants, and fuzz tests.
-
----
-
-## Deploy to Arc Testnet
-
-```bash
-# Set your deployer private key (never commit this)
-export DEPLOYER_PRIVATE_KEY=0x...
-
-forge script contracts/script/DeployEarmark.s.sol:DeployEarmarkTestnet \
-  --rpc-url https://rpc.testnet.arc.io \
-  --broadcast \
-  --legacy
-```
-
-The script prints the deployed contract address. Then set it in your `.env`:
-
-```
-VITE_NETWORK=testnet
-VITE_EARMARK_ADDRESS=0x<deployed-address>
-```
-
-Restart the dev server (`bun run dev`) — Vite only reads `.env` at startup.
-
----
-
-## Deploy to Arc Mainnet
-
-> **Warning: Transactions on mainnet involve real funds and are irreversible.** Test thoroughly on testnet first. You are solely responsible for any losses.
-
-```bash
-export DEPLOYER_PRIVATE_KEY=0x...
-
-forge script contracts/script/DeployEarmark.s.sol:DeployEarmarkMainnet \
-  --rpc-url https://rpc.mainnet.arc.io \
-  --broadcast \
-  --legacy
-```
-
-Then update `.env`:
-
-```
-VITE_NETWORK=mainnet
-VITE_EARMARK_ADDRESS=0x<deployed-address>
+bun run build              # vite production build → dist/
+bun run contracts:build    # forge build
+bun run contracts:test     # forge test (61 tests, all pass)
+bun run check              # lint + typecheck
 ```
 
 ---
 
-## Switch the frontend between networks
+## Disclaimer
 
-The entire network selection lives in `VITE_NETWORK`:
-
-| `.env` setting | Chain | Chain ID | RPC |
-|---|---|---|---|
-| `VITE_NETWORK=testnet` (default) | Arc Testnet | 5042002 | https://rpc.testnet.arc.io |
-| `VITE_NETWORK=mainnet` | Arc Mainnet | 5042 | https://rpc.mainnet.arc.io |
-
-The USDC address (`0x3600000000000000000000000000000000000000`) is identical on both networks.
-
-After changing `.env`, restart the dev server. For a production build:
-
-```bash
-VITE_NETWORK=mainnet VITE_EARMARK_ADDRESS=0x... bun run build
-```
-
----
-
-## Networks
-
-| | Arc Testnet | Arc Mainnet |
-|---|---|---|
-| Chain ID | 5042002 | 5042 |
-| RPC | https://rpc.testnet.arc.io | https://rpc.mainnet.arc.io |
-| Explorer | https://explorer.testnet.arc.io | https://explorer.arc.io |
-| USDC | `0x3600000000000000000000000000000000000000` | `0x3600000000000000000000000000000000000000` |
-
----
-
-## Security notes
-
-- No owner, no admin, no fees, no upgrade proxy. The contract is immutable.
-- Uses OpenZeppelin ReentrancyGuard and SafeERC20 (OZ 5.1.0).
-- Checks-effects-interactions pattern throughout.
-- Passed a balanced security review (0 findings) before deployment.
-- **Experimental. Not professionally audited. Use small amounts.**
-
----
-
-## Receipt links
-
-Every payment gets a public receipt at:
-
-```
-https://your-app.example.com/receipt/:potId/:paymentIndex
-```
-
-No wallet needed. Shows purpose, payee, amount, memo, date, and links to the transaction on the explorer. Share with a school or landlord to prove payment.
-
----
-
-## Architecture
-
-```
-contracts/
-  Earmark.sol              — single contract holding many pots
-  test/Earmark.t.sol       — 52 Foundry unit tests
-  script/DeployEarmark.s.sol — testnet + mainnet deploy scripts
-
-src/
-  earmarkConfig.ts         — network config (VITE_NETWORK)
-  earmarkTypes.ts          — Solidity-matched types, friendly errors
-  hooks/useEarmark.ts      — wagmi read hooks
-  utils/format.ts          — USDC/date formatters
-  pages/
-    HomePage.tsx           — landing / how it works
-    CreatePotPage.tsx       — create a pot (sender)
-    MyPotsPage.tsx         — manage pots (sender)
-    ForMePage.tsx          — pay and request payees (beneficiary)
-    ReceiptPage.tsx        — public verifiable receipt
-  components/
-    NetworkGuard.tsx       — wrong-chain banner + switch button
-    UsdcBalance.tsx        — live USDC balance in header
-    CategoryBadge.tsx      — category label with icon
-    PotProgress.tsx        — spent/remaining progress bar
-    PaymentReceipt.tsx     — single payment card with receipt link
-    TxButton.tsx           — standard CTA with wallet/confirming states
-```
+Experimental — not professionally audited. Use small amounts.

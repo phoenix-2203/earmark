@@ -17,9 +17,9 @@ export default function PotProgress({ pot }: Props) {
   return (
     <div className="space-y-1.5">
       {/* bar */}
-      <div className="h-2 overflow-hidden rounded-full" style={{ background: 'var(--surface-muted)' }}>
+      <div className="h-2 overflow-hidden rounded-full" style={{ background: 'var(--surface-2)' }}>
         <div
-          className="h-full rounded-full transition-all"
+          className="h-full rounded-full"
           style={{
             width: `${Math.min(pct, 100)}%`,
             background: pct >= 90 ? 'var(--danger)' : 'var(--success)',
@@ -28,32 +28,26 @@ export default function PotProgress({ pot }: Props) {
       </div>
 
       {/* labels */}
-      <div className="flex justify-between text-xs tabular-nums" style={{ color: 'var(--muted)' }}>
+      <div className="flex justify-between text-xs tabular-nums text-[var(--muted)]">
         <span>
-          <span style={{ color: 'var(--ink)' }}>
-            {formatUsdc(spent)} USDC
-          </span>{' '}
-          spent
+          <span className="font-mono font-medium text-[var(--ink)]">{formatUsdc(spent)}</span> USDC spent
         </span>
         <span>
-          <span style={{ color: 'var(--ink)' }}>
-            {formatUsdc(balance)} USDC
-          </span>{' '}
-          left
+          <span className="font-mono font-medium text-[var(--accent)]">{formatUsdc(balance)}</span> USDC left
         </span>
       </div>
 
       {/* expiry */}
       {pot.closed ? (
-        <span className="inline-block rounded-full px-2 py-0.5 text-xs font-medium" style={{ background: 'var(--surface-muted)', color: 'var(--muted)' }}>
+        <span className="inline-block rounded-pill px-2 py-0.5 text-xs font-medium bg-[var(--surface-2)] text-[var(--muted)]">
           Closed
         </span>
       ) : expired ? (
-        <span className="inline-block rounded-full px-2 py-0.5 text-xs font-medium" style={{ background: 'rgba(186,43,76,0.08)', color: 'var(--danger)' }}>
-          Expired — reclaim available
+        <span className="inline-block rounded-pill px-2 py-0.5 text-xs font-medium bg-[#FFF4E0] text-[var(--warning)]">
+          Ended — reclaim available
         </span>
       ) : (
-        <span className="inline-block text-xs" style={{ color: 'var(--muted)' }}>
+        <span className="inline-block text-xs text-[var(--muted)]">
           {days} day{days !== 1 ? 's' : ''} remaining
         </span>
       )}

@@ -25,6 +25,15 @@ export const USDC_DECIMALS_LOCAL = usdcFact.decimals
 // Set via .env: VITE_EARMARK_ADDRESS=0x...
 export const EARMARK_ADDRESS = (import.meta.env.VITE_EARMARK_ADDRESS ?? '') as `0x${string}`
 
+/**
+ * The block at which the Earmark contract was deployed on Arc Testnet.
+ * Used as the start block for event log scans so we never crawl from genesis.
+ * Update this when redeploying.  Override via VITE_EARMARK_FROM_BLOCK in .env.
+ */
+export const EARMARK_FROM_BLOCK: bigint = BigInt(
+  String(import.meta.env.VITE_EARMARK_FROM_BLOCK ?? '0')
+)
+
 export const EARMARK_ABI = [
   // createPot
   {

@@ -2,36 +2,78 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ─── Design tokens ──────────────────────────────────────────────────────── */
 :root {
-  --bg: #ffffff;
-  --bg-gradient: linear-gradient(180deg, #f9f9fc 0%, #fffcf7 52%, #fbf7f2 100%);
-  --surface: rgba(255, 255, 255, 0.72);
-  --surface-strong: rgba(255, 255, 255, 0.90);
-  --surface-muted: #f5f5f8;
-  --ink: #122d45;
-  --ink-2: #334155;
-  --muted: #6b6580;
-  --subtle: #8a849c;
-  --border: rgba(18, 45, 69, 0.12);
-  --border-strong: rgba(25, 53, 77, 0.50);
-  --accent: #122d45;
-  --accent-hover: #1061a6;
-  --focus: #85b1ed;
-  --success: #1a8047;
-  --danger: #ba2b4c;
+  /* Surfaces */
+  --bg:          #F5F6F8;
+  --surface:     #FFFFFF;
+  --surface-2:   #EEF1F4;
+  --line:        #DCE1E6;
+
+  /* Text */
+  --ink:         #0F2233;
+  --ink-2:       #3C4B5A;
+  --muted:       #5B6775;   /* ≥4.5:1 on white */
+
+  /* Brand */
+  --accent:      #0F6B5C;
+  --accent-hover:#0B5548;
+  --accent-soft: #E3F1EE;
+  --focus:       #2E7D6F;
+
+  /* Semantic */
+  --success:     #157A55;
+  --warning:     #9A5B07;
+  --danger:      #B42318;
+  --info:        #175CD3;
+
+  /* Legacy aliases kept so older components still compile */
+  --bg-gradient:     #F5F6F8;
+  --border:          #DCE1E6;
+  --border-strong:   #8997A5;
+  --accent-hover-old:#0B5548;
+  --subtle:          #5B6775;
+  --surface-muted:   #EEF1F4;
+  --surface-strong:  #FFFFFF;
 }
 
-* {
-  box-sizing: border-box;
-}
+/* ─── Reset & base ───────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; }
+
+html { scroll-behavior: smooth; }
 
 body {
   margin: 0;
-  font-family: 'DM Sans', sans-serif;
+  background: var(--bg);
+  font-family: 'IBM Plex Sans', 'DM Sans', system-ui, sans-serif;
+  font-size: 16px;
+  line-height: 1.5;
+  color: var(--ink);
   min-height: 100dvh;
-  background: var(--bg-gradient);
+  -webkit-font-smoothing: antialiased;
 }
 
-.display { font-family: 'Space Grotesk', sans-serif; letter-spacing: -0.03em; }
-.mono { font-family: 'JetBrains Mono', Menlo, monospace; }
+/* ─── Typography helpers ─────────────────────────────────────────────────── */
+.display { font-family: 'IBM Plex Sans', 'Space Grotesk', sans-serif; font-weight: 600; letter-spacing: -0.02em; }
+.mono    { font-family: 'IBM Plex Mono', 'JetBrains Mono', Menlo, monospace; font-variant-numeric: tabular-nums; }
 
+/* ─── Focus ring (visible only on keyboard nav) ──────────────────────────── */
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* ─── Motion guard ───────────────────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ─── Colour transitions (150 ms only) ──────────────────────────────────── */
+a, button { transition: color 150ms, background-color 150ms, border-color 150ms, opacity 150ms; }
+
+/* ─── Sonner toast overrides ─────────────────────────────────────────────── */
+[data-sonner-toaster] { font-family: 'IBM Plex Sans', 'DM Sans', sans-serif !important; }

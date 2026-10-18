@@ -13,7 +13,7 @@ export default function UsdcBalance() {
     functionName: 'balanceOf',
     args: address ? [address] : undefined,
     chainId: EARMARK_CHAIN_ID,
-    query: { enabled: isConnected && !!address },
+    query: { enabled: isConnected && !!address, refetchInterval: 30_000, staleTime: 20_000 },
   })
 
   if (!isConnected) return null
@@ -21,8 +21,8 @@ export default function UsdcBalance() {
   return (
     <div className="flex items-center gap-1.5">
       <TokenUSDC variant="branded" size={18} />
-      <span className="tabular-nums text-sm font-semibold" style={{ color: 'var(--ink)' }}>
-        {isLoading ? '…' : `${formatUsdc(balance ?? 0n)} USDC`}
+      <span className="font-mono tabular-nums text-sm font-medium text-[var(--ink)]">
+        {isLoading ? '…' : `${formatUsdc(balance ?? 0n)}`}
       </span>
     </div>
   )
