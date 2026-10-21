@@ -1,8 +1,12 @@
 import { ArrowLeft, GraduationCap, CheckCircle2, ReceiptText, ShieldCheck } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
+import SiteHeader from '@/components/site/SiteHeader'
+import SiteFooter from '@/components/site/SiteFooter'
 
 interface Props {
   onBack: () => void
+  onSend?: () => void
+  onAbout?: () => void
 }
 
 const STEPS = [
@@ -81,9 +85,13 @@ const FAQS = [
   },
 ]
 
-export default function HowItWorksPage({ onBack }: Props) {
+export default function HowItWorksPage({ onBack, onSend, onAbout }: Props) {
+  const handleSend = onSend ?? onBack
+  const handleAbout = onAbout ?? onBack
   return (
-    <main className="mx-auto max-w-content px-4 pb-32 pt-6 md:pb-16">
+    <>
+      <SiteHeader onOpenApp={handleSend} onHow={onBack} onAbout={handleAbout} />
+    <main className="mx-auto max-w-content px-4 pb-16 pt-6">
       <button
         onClick={onBack}
         className="mb-6 flex items-center gap-1.5 text-sm text-[var(--muted)] hover:text-[var(--ink)] focus-visible:outline-2 focus-visible:outline-[var(--focus)] rounded"
@@ -188,5 +196,13 @@ export default function HowItWorksPage({ onBack }: Props) {
         </Button>
       </div>
     </main>
+      <SiteFooter
+        onSend={handleSend}
+        onSent={onBack}
+        onReceived={onBack}
+        onHow={onBack}
+        onAbout={handleAbout}
+      />
+    </>
   )
 }

@@ -4,6 +4,7 @@ import { useAccount } from 'wagmi'
 import NetworkGuard from '@/components/NetworkGuard'
 import UsdcBalance from '@/components/UsdcBalance'
 import HomePage from '@/pages/HomePage'
+import AboutPage from '@/pages/AboutPage'
 import CreatePotPage from '@/pages/CreatePotPage'
 import MyPotsPage from '@/pages/MyPotsPage'
 import ForMePage from '@/pages/ForMePage'
@@ -14,7 +15,7 @@ import { EARMARK_CHAIN, EARMARK_ADDRESS } from '@/earmarkConfig'
 import { Send, Inbox, PiggyBank } from 'lucide-react'
 
 // ── Routes ──────────────────────────────────────────────────────────────────
-export type Page = 'home' | 'send' | 'sent' | 'received' | 'receipt' | 'pot' | 'how'
+export type Page = 'home' | 'about' | 'send' | 'sent' | 'received' | 'receipt' | 'pot' | 'how'
 
 interface Route {
   page: Page
@@ -24,12 +25,10 @@ interface Route {
 
 function parseRoute(): Route {
   const hash = window.location.hash.replace(/^#/, '') || window.location.pathname
-  // /receipt/:potId/:index (hash and path form)
   const receiptMatch = hash.match(/^\/receipt\/(\d+)\/(\d+)$/)
   if (receiptMatch) {
     return { page: 'receipt', potId: BigInt(receiptMatch[1]), paymentIndex: parseInt(receiptMatch[2], 10) }
   }
-  // /pot/:id (hash and path form)
   const potMatch = hash.match(/^\/pot\/(\d+)$/)
   if (potMatch) {
     return { page: 'pot', potId: BigInt(potMatch[1]) }
@@ -38,6 +37,7 @@ function parseRoute(): Route {
   if (hash === '/sent')     return { page: 'sent' }
   if (hash === '/received') return { page: 'received' }
   if (hash === '/how')      return { page: 'how' }
+  if (hash === '/about' || hash.startsWith('/about')) return { page: 'about' }
   return { page: 'home' }
 }
 
@@ -50,20 +50,23 @@ function routeToHash(page: Page, potId?: bigint, paymentIndex?: number): string 
   if (page === 'sent')     return '#/sent'
   if (page === 'received') return '#/received'
   if (page === 'how')      return '#/how'
+  if (page === 'about')    return '#/about'
   return '#/'
 }
 
-// ── Nav items ────────────────────────────────────────────────────────────────
+// ── Nav items (app shell only) ───────────────────────────────────────────────
 const NAV = [
-  { page: 'send'     as Page, label: 'Create a pot',  Icon: Send     },
-  { page: 'sent'     as Page, label: 'Pots I fund',   Icon: PiggyBank},
-  { page: 'received' as Page, label: 'Pots for me',   Icon: Inbox    },
+  { page: 'send'     as Page, label: 'Create a pot',  Icon: Send      },
+  { page: 'sent'     as Page, label: 'Pots I fund',   Icon: PiggyBank },
+  { page: 'received' as Page, label: 'Pots for me',   Icon: Inbox     },
 ]
 
-// Pages that show the full shell (header + nav)
-const SHELL_PAGES: Page[] = ['home', 'send', 'sent', 'received', 'how']
-// Pages that show a minimal public header (wordmark + How it works + wallet) but NOT the tab bar
+// Pages that use the full app shell (header + tab bar)
+const SHELL_PAGES: Page[] = ['send', 'sent', 'received']
+// Pages that use the minimal public header (wordmark + wallet, no tab bar)
 const PUBLIC_PAGES: Page[] = ['pot', 'receipt']
+// Pages that render their own SiteHeader via their component (no shell from App)
+const SITE_PAGES: Page[] = ['home', 'about', 'how']
 
 export default function App() {
   const [route, setRoute] = useState<Route>(parseRoute)
@@ -84,22 +87,21 @@ export default function App() {
   const noContract = EARMARK_ADDRESS.length <= 2
   const showShell = SHELL_PAGES.includes(route.page)
   const showPublicHeader = PUBLIC_PAGES.includes(route.page)
+  const isSitePage = SITE_PAGES.includes(route.page)
 
   return (
-    <div className="min-h-dvh" style={{ background: 'var(--bg)' }}>
-      {/* ── App shell header (full nav) ── */}
+    <div className="min-h-dvh" style={{ background: isSitePage ? '#fff' : 'var(--bg)' }}>
+
+      {/* ── App shell header (full nav) — app pages only ── */}
       {showShell && (
         <header className="sticky top-0 z-40 border-b border-[var(--line)] bg-[var(--surface)]">
           <div className="mx-auto flex max-w-page items-center justify-between px-4 py-3">
-            {/* Wordmark */}
             <button
               onClick={() => navigate('home')}
               className="font-display text-base font-semibold text-[var(--ink)] focus-visible:outline-2 focus-visible:outline-[var(--focus)] rounded"
             >
               Earmark
             </button>
-
-            {/* Desktop nav */}
             <nav className="hidden gap-1 md:flex" aria-label="Main navigation">
               {NAV.map(({ page, label, Icon }) => (
                 <button
@@ -117,22 +119,18 @@ export default function App() {
                 </button>
               ))}
             </nav>
-
-            {/* Right side: balance + wallet */}
             <div className="flex items-center gap-3">
               {isConnected && <UsdcBalance />}
               <ConnectKitButton />
             </div>
           </div>
-
-          {/* Network banner */}
           <div className="px-4 pb-2">
             <NetworkGuard />
           </div>
         </header>
       )}
 
-      {/* ── Minimal public header (pot / receipt pages — no wallet required) ── */}
+      {/* ── Minimal public header (pot / receipt pages) ── */}
       {showPublicHeader && (
         <header className="sticky top-0 z-40 border-b border-[var(--line)] bg-[var(--surface)]">
           <div className="mx-auto flex max-w-page items-center justify-between px-4 py-3">
@@ -157,7 +155,7 @@ export default function App() {
       )}
 
       {/* Contract not deployed notice */}
-      {noContract && showShell && route.page !== 'home' && route.page !== 'how' && (
+      {noContract && showShell && (
         <div className="mx-4 mt-4 rounded-card border border-[#F5C6C3] bg-[#FDECEC] p-4 text-sm text-danger">
           The Earmark contract is not yet deployed. Set <code className="font-mono">VITE_EARMARK_ADDRESS</code> in <code className="font-mono">.env</code> after deploying.
         </div>
@@ -167,9 +165,26 @@ export default function App() {
       {route.page === 'home' && (
         <HomePage
           onSend={() => navigate('send')}
-          onMyPots={() => navigate('sent')}
-          onForMe={() => navigate('received')}
+          onSent={() => navigate('sent')}
+          onReceived={() => navigate('received')}
           onHow={() => navigate('how')}
+          onAbout={() => navigate('about')}
+        />
+      )}
+      {route.page === 'about' && (
+        <AboutPage
+          onSend={() => navigate('send')}
+          onSent={() => navigate('sent')}
+          onReceived={() => navigate('received')}
+          onHow={() => navigate('how')}
+          onBack={() => navigate('home')}
+        />
+      )}
+      {route.page === 'how' && (
+        <HowItWorksPage
+          onBack={() => navigate('home')}
+          onSend={() => navigate('send')}
+          onAbout={() => navigate('about')}
         />
       )}
       {route.page === 'send' && (
@@ -179,14 +194,10 @@ export default function App() {
         />
       )}
       {route.page === 'sent' && (
-        <MyPotsPage
-          onViewPot={(potId) => navigate('pot', potId)}
-        />
+        <MyPotsPage onViewPot={(potId) => navigate('pot', potId)} />
       )}
       {route.page === 'received' && (
-        <ForMePage
-          onViewPot={(potId) => navigate('pot', potId)}
-        />
+        <ForMePage onViewPot={(potId) => navigate('pot', potId)} />
       )}
       {route.page === 'receipt' && route.potId !== undefined && route.paymentIndex !== undefined && (
         <ReceiptPage
@@ -202,11 +213,8 @@ export default function App() {
           onReceipt={(potId, index) => navigate('receipt', potId, index)}
         />
       )}
-      {route.page === 'how' && (
-        <HowItWorksPage onBack={() => navigate('home')} />
-      )}
 
-      {/* ── Mobile bottom tab bar ── */}
+      {/* ── Mobile bottom tab bar (app shell pages only) ── */}
       {showShell && (
         <nav
           className="fixed bottom-0 left-0 right-0 z-40 flex border-t border-[var(--line)] bg-[var(--surface)] md:hidden"
@@ -227,7 +235,7 @@ export default function App() {
         </nav>
       )}
 
-      {/* ── Global footer (shell pages only) ── */}
+      {/* ── Compact footer (app shell pages only) ── */}
       {showShell && (
         <footer className="mx-auto max-w-page px-4 pb-24 pt-8 text-center text-xs text-[var(--muted)] md:pb-8">
           <span>{EARMARK_CHAIN.name} · </span>

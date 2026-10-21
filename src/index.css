@@ -82,3 +82,13 @@ a, button { transition: color 150ms, background-color 150ms, border-color 150ms,
 @media (max-width: 767px) {
   .arc-studio-watermark { bottom: 72px !important; }
 }
+
+/* ─── Landing page animations ───────────────────────────────────────────── */
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ─── FAQ chevron (details/summary) ─────────────────────────────────────── */
+details summary::-webkit-details-marker { display: none; }
+details[open] > summary .chevron-icon { transform: rotate(180deg); }
