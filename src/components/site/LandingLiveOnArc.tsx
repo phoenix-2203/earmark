@@ -134,7 +134,7 @@ export default function LandingLiveOnArc() {
 
         {/* Stats bar */}
         <div className="mb-6 flex flex-wrap justify-center gap-6">
-          <StatChip label="Pots created" value={loading ? '—' : (potCount ?? 0n).toString()} />
+          <StatChip label="Pots created" value={loading || error ? '—' : (potCount ?? 0n).toString()} />
           <StatChip label="Network" value={EARMARK_CHAIN.name} />
           <StatChip
             label="Contract"

@@ -67,9 +67,28 @@ export default function LandingHero({ onSend }: Props) {
 
 type AnimState = 'idle' | 'fund' | 'pay-ok' | 'pay-blocked' | 'done-ok' | 'done-blocked'
 
+/*
+ * Coordinate system — viewBox "0 0 360 340"
+ *
+ *  Funder        (20, 130)  w=80  h=44
+ *  Pot           (150, 118) w=80  h=64
+ *  Greenfield    (280, 72)  w=80  h=44   ← approved payee 1
+ *  City Clinic   (280, 164) w=80  h=44   ← approved payee 2
+ *  Any other     (150, 252) w=80  h=38   ← blocked
+ *  Receipt chip  below Greenfield node (inside SVG, y≈128)
+ */
+
+// Node centres
+const C = {
+  funder:     { x: 60,  y: 152 },
+  pot:        { x: 190, y: 150 },
+  greenfield: { x: 320, y: 94  },
+  clinic:     { x: 320, y: 186 },
+  blocked:    { x: 190, y: 271 },
+} as const
+
 function FlowDiagram() {
   const [state, setState] = useState<AnimState>('idle')
-  // Lazy-initialize to avoid setState-in-effect for the initial media query read
   const [reduced, setReduced] = useState<boolean>(
     () => window.matchMedia('(prefers-reduced-motion: reduce)').matches
   )
@@ -104,75 +123,103 @@ function FlowDiagram() {
     }, 1000)
   }, [reduced])
 
-  // Auto-play on mount — use a ref flag so the first run fires once without a
-  // synchronous setState call that would violate set-state-in-effect
   const didAutoPlay = useRef(false)
   useEffect(() => {
     if (didAutoPlay.current) return
     didAutoPlay.current = true
-    // Defer by one tick so it runs after the initial render, not synchronously
     const id = setTimeout(replay, 0)
     return () => { clearTimeout(id); clearTimer() }
   }, [replay])
 
-  const dotPos = dotPosition(state)
+  const dot = dotPosition(state)
+  // Hide dot once animation is fully settled so it doesn't sit on a label
+  const showDot = dot !== null && state !== 'done-ok' && state !== 'done-blocked'
   const showReceipt = state === 'done-ok'
-  const showBlock = state === 'done-blocked' || state === 'pay-blocked'
+  const showBlock   = state === 'done-blocked' || state === 'pay-blocked'
 
   return (
-    <figure className="w-full max-w-sm" aria-label="Illustration of how Earmark works">
-      {/* SVG diagram */}
-      <div className="rounded-card border border-[var(--line)] bg-[var(--surface)] p-5 shadow-card relative overflow-hidden">
-
-        {/* Static layout */}
-        <svg viewBox="0 0 300 220" width="100%" aria-hidden className="block">
+    <figure className="w-full max-w-[480px]" aria-label="Illustration of how Earmark works">
+      <div
+        className="rounded-card border border-[var(--line)] bg-[var(--surface)] shadow-card overflow-hidden"
+        style={{ minHeight: 360 }}
+      >
+        {/* SVG — viewBox sized to fill the card comfortably */}
+        <svg
+          viewBox="0 0 360 340"
+          width="100%"
+          aria-hidden
+          className="block"
+          style={{ minHeight: 300 }}
+        >
           {/* ── Funder ── */}
-          <rect x="10" y="90" width="70" height="36" rx="8" fill="var(--accent-soft)" stroke="var(--accent)" strokeWidth="1.5"/>
-          <text x="45" y="103" textAnchor="middle" fill="var(--accent)" fontSize="9" fontWeight="600" fontFamily="IBM Plex Sans,sans-serif">FUNDER</text>
-          <text x="45" y="116" textAnchor="middle" fill="var(--muted)" fontSize="7.5" fontFamily="IBM Plex Mono,monospace">0xF0…01</text>
+          <rect x="20" y="130" width="80" height="44" rx="10"
+            fill="var(--accent-soft)" stroke="var(--accent)" strokeWidth="1.5"/>
+          <text x="60" y="148" textAnchor="middle" fill="var(--accent)" fontSize="11" fontWeight="700" fontFamily="IBM Plex Sans,sans-serif">FUNDER</text>
+          <text x="60" y="163" textAnchor="middle" fill="var(--muted)" fontSize="10" fontFamily="IBM Plex Mono,monospace">0xF0…01</text>
 
           {/* ── Arrow funder→pot ── */}
-          <line x1="80" y1="108" x2="110" y2="108" stroke="var(--line)" strokeWidth="1.5" strokeDasharray="3 2"/>
-          <polygon points="110,104 118,108 110,112" fill="var(--accent)" opacity="0.5"/>
+          <line x1="100" y1="152" x2="140" y2="152" stroke="var(--line)" strokeWidth="1.5" strokeDasharray="4 3"/>
+          <polygon points="140,147 150,152 140,157" fill="var(--accent)" opacity="0.6"/>
 
           {/* ── Pot ── */}
-          <rect x="118" y="80" width="72" height="56" rx="10" fill="var(--accent-soft)" stroke="var(--accent)" strokeWidth="2"/>
-          <text x="154" y="98" textAnchor="middle" fill="var(--accent)" fontSize="9" fontWeight="700" fontFamily="IBM Plex Sans,sans-serif">POT</text>
+          <rect x="150" y="118" width="80" height="64" rx="12"
+            fill="var(--accent-soft)" stroke="var(--accent)" strokeWidth="2"/>
+          <text x="190" y="140" textAnchor="middle" fill="var(--accent)" fontSize="13" fontWeight="700" fontFamily="IBM Plex Sans,sans-serif">POT</text>
           {/* Lock tag */}
-          <rect x="126" y="104" width="56" height="22" rx="5" fill="white" stroke="var(--line)" strokeWidth="1"/>
-          <text x="154" y="113" textAnchor="middle" fill="var(--ink-2)" fontSize="6.5" fontFamily="IBM Plex Sans,sans-serif">School fees</text>
-          <text x="154" y="121" textAnchor="middle" fill="var(--muted)" fontSize="5.5" fontFamily="IBM Plex Sans,sans-serif">Term 1 · 500 USDC</text>
+          <rect x="158" y="146" width="64" height="26" rx="6" fill="white" stroke="var(--line)" strokeWidth="1"/>
+          <text x="190" y="158" textAnchor="middle" fill="var(--ink-2)" fontSize="10" fontFamily="IBM Plex Sans,sans-serif">School fees</text>
+          <text x="190" y="168" textAnchor="middle" fill="var(--muted)" fontSize="9" fontFamily="IBM Plex Sans,sans-serif">Term 1 · 500 USDC</text>
 
-          {/* ── Arrow pot→approved payees ── */}
-          {/* to Greenfield */}
-          <line x1="190" y1="100" x2="214" y2="80" stroke="var(--line)" strokeWidth="1.5" strokeDasharray="3 2"/>
-          <polygon points="211,76 219,79 215,87" fill="var(--success)" opacity="0.6"/>
-          {/* to City Clinic */}
-          <line x1="190" y1="116" x2="214" y2="140" stroke="var(--line)" strokeWidth="1.5" strokeDasharray="3 2"/>
-          <polygon points="211,137 219,141 215,149" fill="var(--success)" opacity="0.6"/>
+          {/* ── Arrow pot→Greenfield ── */}
+          <line x1="230" y1="138" x2="272" y2="100" stroke="var(--line)" strokeWidth="1.5" strokeDasharray="4 3"/>
+          <polygon points="269,95 278,98 274,107" fill="var(--success)" opacity="0.7"/>
 
-          {/* ── Approved payee 1: Greenfield ── */}
-          <rect x="218" y="58" width="74" height="36" rx="8" fill="#E6FFF4" stroke="var(--success)" strokeWidth="1.5"/>
-          <text x="255" y="71" textAnchor="middle" fill="var(--success)" fontSize="8" fontWeight="600" fontFamily="IBM Plex Sans,sans-serif">Greenfield</text>
-          <text x="255" y="81" textAnchor="middle" fill="var(--success)" fontSize="8" fontFamily="IBM Plex Sans,sans-serif">School ✓</text>
+          {/* ── Arrow pot→City Clinic ── */}
+          <line x1="230" y1="166" x2="272" y2="180" stroke="var(--line)" strokeWidth="1.5" strokeDasharray="4 3"/>
+          <polygon points="269,176 278,181 274,190" fill="var(--success)" opacity="0.7"/>
 
-          {/* ── Approved payee 2: City Clinic ── */}
-          <rect x="218" y="118" width="74" height="36" rx="8" fill="#E6FFF4" stroke="var(--success)" strokeWidth="1.5"/>
-          <text x="255" y="131" textAnchor="middle" fill="var(--success)" fontSize="8" fontWeight="600" fontFamily="IBM Plex Sans,sans-serif">City Clinic</text>
-          <text x="255" y="141" textAnchor="middle" fill="var(--success)" fontSize="8" fontFamily="IBM Plex Sans,sans-serif">✓</text>
+          {/* ── Greenfield School ── */}
+          <rect x="280" y="72" width="76" height="44" rx="10"
+            fill="#E6FFF4" stroke="var(--success)" strokeWidth="1.5"/>
+          <text x="318" y="89" textAnchor="middle" fill="var(--success)" fontSize="11" fontWeight="700" fontFamily="IBM Plex Sans,sans-serif">Greenfield</text>
+          <text x="318" y="104" textAnchor="middle" fill="var(--success)" fontSize="11" fontFamily="IBM Plex Sans,sans-serif">School ✓</text>
+
+          {/* ── Receipt chip — appears below Greenfield when done-ok ── */}
+          {showReceipt && (
+            <g style={{ animation: reduced ? 'none' : 'fadeInUp 0.3s ease' }}>
+              <rect x="272" y="122" width="92" height="22" rx="11"
+                fill="var(--success)" opacity="0.95"/>
+              <text x="318" y="136" textAnchor="middle" fill="white" fontSize="10" fontWeight="600" fontFamily="IBM Plex Sans,sans-serif">✓ Receipt on Arc</text>
+            </g>
+          )}
+
+          {/* ── City Clinic ── */}
+          <rect x="280" y="164" width="76" height="44" rx="10"
+            fill="#E6FFF4" stroke="var(--success)" strokeWidth="1.5"/>
+          <text x="318" y="181" textAnchor="middle" fill="var(--success)" fontSize="11" fontWeight="700" fontFamily="IBM Plex Sans,sans-serif">City Clinic</text>
+          <text x="318" y="196" textAnchor="middle" fill="var(--success)" fontSize="11" fontFamily="IBM Plex Sans,sans-serif">✓</text>
+
+          {/* ── Arrow pot→blocked (dashed red) ── */}
+          <line x1="190" y1="182" x2="190" y2="242" stroke="var(--danger)" strokeWidth="1.5" strokeDasharray="4 3" opacity="0.4"/>
+          <polygon points="184,242 190,252 196,242" fill="var(--danger)" opacity="0.4"/>
 
           {/* ── Blocked: any other wallet ── */}
-          <line x1="154" y1="136" x2="154" y2="172" stroke="var(--danger)" strokeWidth="1.5" strokeDasharray="3 2" opacity="0.4"/>
-          <rect x="114" y="172" width="80" height="30" rx="8" fill="#FDECEC" stroke="var(--danger)" strokeWidth="1.5" opacity="0.6"/>
-          <text x="154" y="186" textAnchor="middle" fill="var(--danger)" fontSize="8" fontWeight="600" fontFamily="IBM Plex Sans,sans-serif">Any other wallet</text>
-          <text x="154" y="196" textAnchor="middle" fill="var(--danger)" fontSize="8" fontFamily="IBM Plex Sans,sans-serif">✕</text>
+          <rect x="130" y="252" width="120" height="40" rx="10"
+            fill="#FDECEC" stroke="var(--danger)" strokeWidth="1.5" opacity="0.7"/>
+          <text x="190" y="268" textAnchor="middle" fill="var(--danger)" fontSize="12" fontWeight="600" fontFamily="IBM Plex Sans,sans-serif">Any other wallet</text>
+          <text x="190" y="283" textAnchor="middle" fill="var(--danger)" fontSize="12" fontFamily="IBM Plex Sans,sans-serif">✕</text>
+
+          {/* ── Barrier on blocked path ── */}
+          {showBlock && (
+            <line x1="176" y1="230" x2="204" y2="230" stroke="var(--danger)" strokeWidth="4" strokeLinecap="round"/>
+          )}
 
           {/* ── Animated USDC dot ── */}
-          {dotPos && (
+          {showDot && dot && (
             <circle
-              cx={dotPos.x}
-              cy={dotPos.y}
-              r="6"
+              cx={dot.x}
+              cy={dot.y}
+              r="8"
               fill="var(--accent)"
               opacity="0.85"
               style={{ transition: reduced ? 'none' : 'cx 0.8s ease, cy 0.8s ease' }}
@@ -180,39 +227,21 @@ function FlowDiagram() {
               <title>USDC</title>
             </circle>
           )}
-
-          {/* ── Barrier on blocked path ── */}
-          {showBlock && (
-            <g>
-              <line x1="144" y1="162" x2="164" y2="162" stroke="var(--danger)" strokeWidth="3" strokeLinecap="round"/>
-            </g>
-          )}
         </svg>
 
-        {/* Receipt chip */}
-        {showReceipt && (
-          <div
-            className="absolute bottom-14 right-4 rounded-full bg-[var(--success)] px-2.5 py-1 text-[10px] font-semibold text-white shadow"
-            style={{ animation: reduced ? 'none' : 'fadeInUp 0.3s ease' }}
-            aria-live="polite"
-          >
-            ✓ Receipt recorded on Arc
-          </div>
-        )}
-
-        {/* Blocked message */}
+        {/* Blocked message — below SVG so it doesn't crowd the diagram */}
         {showBlock && (
           <div
-            className="absolute bottom-14 inset-x-4 rounded-lg bg-[#FDECEC] border border-[var(--danger)] px-3 py-2 text-[10px] text-[var(--danger)] font-medium"
+            className="mx-4 mb-3 rounded-lg bg-[#FDECEC] border border-[var(--danger)] px-3 py-2 text-xs text-[var(--danger)] font-medium leading-snug"
             style={{ animation: reduced ? 'none' : 'fadeInUp 0.3s ease' }}
             aria-live="polite"
           >
-            Blocked by the contract: PayeeNotApproved — only approved payees can be paid.
+            Blocked: PayeeNotApproved — only approved payees can be paid.
           </div>
         )}
 
         {/* Caption */}
-        <p className="mt-2 text-center text-[10px] text-[var(--muted)]" aria-hidden>
+        <p className="pb-3 text-center text-[11px] text-[var(--muted)]" aria-hidden>
           Illustration
         </p>
       </div>
@@ -240,11 +269,11 @@ function FlowDiagram() {
 function dotPosition(state: AnimState): { x: number; y: number } | null {
   switch (state) {
     case 'idle':         return null
-    case 'fund':         return { x: 45, y: 108 }
-    case 'pay-ok':       return { x: 154, y: 108 }
-    case 'done-ok':      return { x: 255, y: 76 }
-    case 'pay-blocked':  return { x: 154, y: 136 }
-    case 'done-blocked': return { x: 154, y: 162 }
+    case 'fund':         return { x: C.funder.x,     y: C.funder.y     }
+    case 'pay-ok':       return { x: C.pot.x,         y: C.pot.y        }
+    case 'done-ok':      return { x: C.greenfield.x,  y: C.greenfield.y }
+    case 'pay-blocked':  return { x: C.pot.x,         y: C.blocked.y - 40 }
+    case 'done-blocked': return { x: C.blocked.x,     y: C.blocked.y    }
     default:             return null
   }
 }
