@@ -3,16 +3,20 @@
  *
  * State machine: idle → checking → awaitingSignature → submitted → confirmed | failed
  *
- * Flow (always inside an async event handler):
- *   validate inputs → check wallet connected + on EARMARK_CHAIN_ID →
- *   simulateContract → writeContractAsync → show "Submitted" with tx hash →
- *   waitForTransactionReceipt → "Confirmed" → refetch → done
+ * Flow:
+ *   check wallet + chain → simulateContract (pre-flight) →
+ *   writeContract → submitted (show hash) →
+ *   waitForTransactionReceipt →
+ *     status=success  → confirmed
+ *     status=reverted → re-simulate to decode error name → failed
+ *     network/timeout → "Submitted — couldn't confirm, check explorer" → failed
  *
  * Error handling:
- *   - User rejection  → "You cancelled in your wallet. Nothing was sent."
- *   - Revert          → decode custom error name via BaseError.walk → friendlyError
- *   - Network error   → "Couldn't reach Arc. Your transaction may still go through — check the explorer link."
- *   - Receipt fetch fails after confirmed tx → report success, say view will update
+ *   - User rejection   → "You cancelled in your wallet. Nothing was sent."
+ *   - Pre-flight revert → decode via BaseError.walk → ContractFunctionRevertedError
+ *   - Post-submit revert → re-simulate to get error name → friendlyErrorName
+ *   - Network error    → "Couldn't reach Arc. Your transaction may still go through — check the explorer link."
+ *   - Receipt network err after submit → "Submitted — couldn't confirm yet, check the explorer link."
  */
 
 import { useState, useCallback, useRef } from 'react'
@@ -39,7 +43,6 @@ export interface ActionResult {
   state: ActionState
   txHash: `0x${string}` | undefined
   errorMessage: string | undefined
-  /** Call this to trigger the action. Pass validated args and onSuccess callback. */
   execute: (params: ExecuteParams) => Promise<void>
   reset: () => void
   isBusy: boolean
@@ -58,42 +61,55 @@ export interface ExecuteParams {
   onSuccess?: (txHash: `0x${string}`) => void | Promise<void>
 }
 
-function extractErrorMessage(err: unknown): string {
-  // User rejection
+/** Decode a pre-flight or post-submit error into a user-friendly string. */
+function decodeContractError(err: unknown): string {
   if (err instanceof UserRejectedRequestError) {
     return 'You cancelled in your wallet. Nothing was sent.'
   }
   if (err instanceof BaseError) {
-    // Walk for UserRejectedRequestError nested
     const rejected = err.walk((e) => e instanceof UserRejectedRequestError)
     if (rejected) return 'You cancelled in your wallet. Nothing was sent.'
 
-    // Walk for revert with custom error name
     const revert = err.walk((e) => e instanceof ContractFunctionRevertedError)
     if (revert instanceof ContractFunctionRevertedError) {
       const name = revert.data?.errorName
       if (name) return friendlyErrorName(name)
-      // fallback to error message
-      return revert.shortMessage ?? 'Transaction reverted.'
+      return revert.shortMessage ?? 'The transaction was rejected by the contract.'
     }
 
-    // Network / RPC errors
+    const msg = err.message.toLowerCase()
     if (
-      err.message.toLowerCase().includes('network') ||
-      err.message.toLowerCase().includes('fetch') ||
-      err.message.toLowerCase().includes('timeout') ||
-      err.message.toLowerCase().includes('rpc')
+      msg.includes('network') ||
+      msg.includes('fetch') ||
+      msg.includes('timeout') ||
+      msg.includes('rpc')
     ) {
       return "Couldn't reach Arc. Your transaction may still go through — check the explorer link."
     }
 
     return err.shortMessage ?? err.message ?? 'Something went wrong.'
   }
-  const msg = String(err).toLowerCase()
-  if (msg.includes('user rejected') || msg.includes('user denied') || msg.includes('4001')) {
+  const s = String(err).toLowerCase()
+  if (s.includes('user rejected') || s.includes('user denied') || s.includes('4001')) {
     return 'You cancelled in your wallet. Nothing was sent.'
   }
   return 'Something went wrong. Please try again.'
+}
+
+/**
+ * After a tx is already on-chain and the receipt says "reverted", re-run
+ * simulateContract with the same params to surface the decoded custom error name.
+ * Falls back to a generic message if simulate also fails without an error name.
+ */
+async function decodeRevertedReceipt(contractCall: ContractCallParams): Promise<string> {
+  try {
+    // @ts-expect-error – ContractCallParams is valid at runtime
+    await simulateContract(config, contractCall)
+    // Simulate didn't throw — shouldn't happen after a revert, use generic message
+    return 'The transaction was rejected by the contract.'
+  } catch (simErr) {
+    return decodeContractError(simErr)
+  }
 }
 
 export function useContractAction(): ActionResult {
@@ -102,7 +118,6 @@ export function useContractAction(): ActionResult {
   const [errorMessage, setErrorMessage] = useState<string | undefined>()
   const { isConnected, chainId, address } = useAccount()
   const { switchChainAsync } = useSwitchChain()
-  // Guard against stale async completions after reset
   const runIdRef = useRef(0)
 
   const reset = useCallback(() => {
@@ -126,7 +141,7 @@ export function useContractAction(): ActionResult {
         throw new Error('Connect your wallet first.')
       }
 
-      // 2. Correct chain? Offer switch.
+      // 2. Correct chain?
       if (chainId !== EARMARK_CHAIN_ID) {
         try {
           await switchChainAsync({ chainId: EARMARK_CHAIN_ID })
@@ -141,16 +156,14 @@ export function useContractAction(): ActionResult {
       if (!guard()) return
       setState('awaitingSignature')
 
-      // simulateContract/writeContract use strict discriminated-union generics for
-      // gas params; our loose ContractCallParams can't satisfy them statically, but
-      // the runtime values are correct. Suppress with @ts-expect-error.
-      // @ts-expect-error – typed ContractCallParams is valid at runtime
+      // 3. Pre-flight simulate — surfaces revert before asking the wallet to sign
+      // @ts-expect-error – ContractCallParams is valid at runtime
       await simulateContract(config, contractCall)
 
       if (!guard()) return
 
       // 4. Write
-      // @ts-expect-error – typed ContractCallParams is valid at runtime
+      // @ts-expect-error – ContractCallParams is valid at runtime
       const hash = await writeContract(config, contractCall)
 
       if (!guard()) return
@@ -158,28 +171,56 @@ export function useContractAction(): ActionResult {
       setState('submitted')
 
       // 5. Wait for receipt
+      let receipt: { status: string }
       try {
-        await waitForTransactionReceipt(config, { hash, chainId: EARMARK_CHAIN_ID })
-      } catch {
-        // Receipt fetch failed — but the tx was already submitted and likely confirmed
+        receipt = await waitForTransactionReceipt(config, { hash, chainId: EARMARK_CHAIN_ID })
+      } catch (receiptErr) {
+        // Receipt fetch failed. Distinguish between:
+        //   a) The node told us the tx reverted (wagmi throws with status=reverted)
+        //   b) A genuine network/timeout error — tx probably mined but we lost connectivity
         if (!guard()) return
-        setState('confirmed')
-        if (onSuccess) {
-          try { await onSuccess(hash) } catch { /* ignore */ }
+
+        const msg = String(receiptErr).toLowerCase()
+        const isReverted =
+          msg.includes('reverted') ||
+          msg.includes('revert') ||
+          (receiptErr instanceof BaseError && msg.includes('transaction'))
+
+        if (isReverted) {
+          // Re-simulate to decode the revert reason
+          const reason = await decodeRevertedReceipt(contractCall)
+          if (!guard()) return
+          setState('failed')
+          setErrorMessage(reason)
+        } else {
+          // Network/timeout: tx was submitted, we just can't confirm it yet
+          setState('failed')
+          setErrorMessage(
+            'Submitted — couldn\'t confirm yet. Check the explorer link to see if it went through.'
+          )
         }
         return
       }
 
       if (!guard()) return
-      setState('confirmed')
 
+      // Receipt obtained — check status
+      if (receipt.status === 'reverted') {
+        const reason = await decodeRevertedReceipt(contractCall)
+        if (!guard()) return
+        setState('failed')
+        setErrorMessage(reason)
+        return
+      }
+
+      setState('confirmed')
       if (onSuccess) {
         try { await onSuccess(hash) } catch { /* ignore */ }
       }
     } catch (err) {
       if (!guard()) return
       setState('failed')
-      setErrorMessage(extractErrorMessage(err))
+      setErrorMessage(decodeContractError(err))
     }
   }, [isConnected, chainId, address, switchChainAsync])
 

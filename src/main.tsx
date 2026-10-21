@@ -33,11 +33,13 @@ const StudioLogo = () => (
 )
 
 // Studio watermark component - links back to Studio
+// On mobile the tab bar is 56px; bump the watermark above it.
 const StudioWatermark = () => (
   <a
     href="https://studio.arc.io/"
     target="_blank"
     rel="noopener noreferrer"
+    className="arc-studio-watermark"
     style={{
       position: 'fixed',
       bottom: '16px',

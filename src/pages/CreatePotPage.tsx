@@ -17,7 +17,7 @@ import { erc20Abi } from 'viem'
 import {
   simulateContract, writeContract, waitForTransactionReceipt,
 } from '@wagmi/core'
-import { BaseError, ContractFunctionRevertedError, UserRejectedRequestError } from 'viem'
+import { BaseError, ContractFunctionRevertedError, UserRejectedRequestError, decodeEventLog } from 'viem'
 import { Plus, Trash2, ArrowLeft } from 'lucide-react'
 import { toast } from 'sonner'
 import { config } from '@/config'
@@ -228,12 +228,21 @@ export default function CreatePotPage({ onBack, onSuccess }: Props) {
 
       const receipt = await waitForTransactionReceipt(config, { hash: createHash, chainId: EARMARK_CHAIN_ID })
 
-      // Extract potId from PotCreated event logs
+      // Decode potId from the PotCreated event using the ABI (not raw topics)
       let potId: bigint | undefined
       for (const log of receipt.logs) {
-        if (log.topics[1]) {
-          try { potId = BigInt(log.topics[1]); break } catch { /* skip */ }
-        }
+        if (log.address.toLowerCase() !== EARMARK_ADDRESS.toLowerCase()) continue
+        try {
+          const decoded = decodeEventLog({
+            abi: EARMARK_ABI,
+            data: log.data,
+            topics: log.topics,
+          })
+          if (decoded.eventName === 'PotCreated') {
+            const args = decoded.args as { potId?: bigint }
+            if (typeof args.potId === 'bigint') { potId = args.potId; break }
+          }
+        } catch { /* not this event or wrong ABI entry, skip */ }
       }
 
       setTxPhase('done')

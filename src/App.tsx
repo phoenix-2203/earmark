@@ -62,6 +62,8 @@ const NAV = [
 
 // Pages that show the full shell (header + nav)
 const SHELL_PAGES: Page[] = ['home', 'send', 'sent', 'received', 'how']
+// Pages that show a minimal public header (wordmark + How it works + wallet) but NOT the tab bar
+const PUBLIC_PAGES: Page[] = ['pot', 'receipt']
 
 export default function App() {
   const [route, setRoute] = useState<Route>(parseRoute)
@@ -81,10 +83,11 @@ export default function App() {
 
   const noContract = EARMARK_ADDRESS.length <= 2
   const showShell = SHELL_PAGES.includes(route.page)
+  const showPublicHeader = PUBLIC_PAGES.includes(route.page)
 
   return (
     <div className="min-h-dvh" style={{ background: 'var(--bg)' }}>
-      {/* ── App shell header ── */}
+      {/* ── App shell header (full nav) ── */}
       {showShell && (
         <header className="sticky top-0 z-40 border-b border-[var(--line)] bg-[var(--surface)]">
           <div className="mx-auto flex max-w-page items-center justify-between px-4 py-3">
@@ -125,6 +128,30 @@ export default function App() {
           {/* Network banner */}
           <div className="px-4 pb-2">
             <NetworkGuard />
+          </div>
+        </header>
+      )}
+
+      {/* ── Minimal public header (pot / receipt pages — no wallet required) ── */}
+      {showPublicHeader && (
+        <header className="sticky top-0 z-40 border-b border-[var(--line)] bg-[var(--surface)]">
+          <div className="mx-auto flex max-w-page items-center justify-between px-4 py-3">
+            <button
+              onClick={() => navigate('home')}
+              className="font-display text-base font-semibold text-[var(--ink)] focus-visible:outline-2 focus-visible:outline-[var(--focus)] rounded"
+            >
+              Earmark
+            </button>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => navigate('how')}
+                className="hidden sm:block text-sm font-medium text-[var(--ink-2)] hover:text-[var(--ink)] focus-visible:outline-2 focus-visible:outline-[var(--focus)] rounded"
+              >
+                How it works
+              </button>
+              {isConnected && <UsdcBalance />}
+              <ConnectKitButton />
+            </div>
           </div>
         </header>
       )}

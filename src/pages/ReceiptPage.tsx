@@ -2,8 +2,8 @@
  * Public receipt page: #/receipt/:potId/:paymentIndex
  * No wallet needed. Shows purpose, payee, amount, memo, date, explorer link.
  */
-import { ArrowLeft, CheckCircle2, ExternalLink } from 'lucide-react'
-import { Loader2 } from 'lucide-react'
+import { ArrowLeft, CheckCircle2, ExternalLink, Copy, Check, Loader2 } from 'lucide-react'
+import { useState } from 'react'
 import { usePot, usePayments, usePayees } from '@/hooks/useEarmark'
 import { usePaidEventTxHash } from '@/hooks/useEventTxHash'
 import { EARMARK_CHAIN } from '@/earmarkConfig'
@@ -32,6 +32,15 @@ export default function ReceiptPage({ potId, paymentIndex, onBack }: Props) {
   const { data: payments, isLoading: pmtLoading } = usePayments(potId)
   const { data: payees } = usePayees(potId)
   const { txHash } = usePaidEventTxHash(potId, paymentIndex)
+  const [copied, setCopied] = useState(false)
+
+  function handleCopyLink() {
+    const url = `${window.location.origin}/#/receipt/${potId}/${paymentIndex}`
+    void navigator.clipboard.writeText(url).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    })
+  }
 
   const loading = potLoading || pmtLoading
 
@@ -57,12 +66,21 @@ export default function ReceiptPage({ potId, paymentIndex, onBack }: Props) {
 
   return (
     <main className="mx-auto max-w-content px-4 pb-32 pt-6 md:pb-16">
-      <button
-        onClick={onBack}
-        className="mb-6 flex items-center gap-1.5 text-sm text-[var(--muted)] hover:text-[var(--ink)] focus-visible:outline-2 focus-visible:outline-[var(--focus)] rounded"
-      >
-        <ArrowLeft className="size-4" aria-hidden /> Back
-      </button>
+      <div className="mb-6 flex items-center justify-between">
+        <button
+          onClick={onBack}
+          className="flex items-center gap-1.5 text-sm text-[var(--muted)] hover:text-[var(--ink)] focus-visible:outline-2 focus-visible:outline-[var(--focus)] rounded"
+        >
+          <ArrowLeft className="size-4" aria-hidden /> Back
+        </button>
+        <button
+          onClick={handleCopyLink}
+          className="flex items-center gap-1.5 rounded-input border border-[var(--line)] bg-[var(--surface)] px-3 py-2 text-sm font-medium text-[var(--ink)] hover:bg-[var(--surface-2)] focus-visible:outline-2 focus-visible:outline-[var(--focus)]"
+        >
+          {copied ? <Check className="size-4 text-[var(--success)]" aria-hidden /> : <Copy className="size-4" aria-hidden />}
+          {copied ? 'Copied!' : 'Copy link'}
+        </button>
+      </div>
 
       {/* Header */}
       <div className="mb-8 text-center">
@@ -71,6 +89,9 @@ export default function ReceiptPage({ potId, paymentIndex, onBack }: Props) {
         </div>
         <h1 className="display text-2xl font-semibold text-[var(--ink)]">Payment receipt</h1>
         <p className="mt-1 text-xs text-[var(--muted)]">Verified on {EARMARK_CHAIN.name}</p>
+        <p className="mt-2 text-xs text-[var(--muted)] max-w-xs mx-auto">
+          Read directly from the Arc blockchain. It proves payments from this pot to these addresses; it doesn't prove who owns an address.
+        </p>
       </div>
 
       {/* Amount hero */}

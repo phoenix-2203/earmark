@@ -67,22 +67,20 @@ export default function HomePage({ onSend, onMyPots, onForMe, onHow }: Props) {
           ].map(({ n, Icon, title, desc }) => (
             <li
               key={n}
-              className="flex gap-4 rounded-card border border-[var(--line)] bg-[var(--surface)] p-4 shadow-card"
+              className="rounded-card border border-[var(--line)] bg-[var(--surface)] p-4 shadow-card"
             >
-              <div
-                className="flex size-8 shrink-0 items-center justify-center rounded-full text-sm font-semibold"
-                style={{ background: 'var(--accent-soft)', color: 'var(--accent)' }}
-                aria-hidden
-              >
-                {n}
+              <div className="mb-1 flex items-center gap-2">
+                <span
+                  className="flex size-6 shrink-0 items-center justify-center rounded-full text-xs font-bold"
+                  style={{ background: 'var(--accent-soft)', color: 'var(--accent)' }}
+                  aria-hidden
+                >
+                  {n}
+                </span>
+                <Icon className="size-4 shrink-0 text-[var(--accent)]" aria-hidden />
+                <p className="text-sm font-semibold text-[var(--ink)]">{title}</p>
               </div>
-              <div>
-                <div className="mb-1 flex items-center gap-1.5">
-                  <Icon className="size-4 text-[var(--accent)]" aria-hidden />
-                  <p className="text-sm font-semibold text-[var(--ink)]">{title}</p>
-                </div>
-                <p className="text-xs text-[var(--muted)] text-pretty">{desc}</p>
-              </div>
+              <p className="mt-1.5 text-xs text-[var(--muted)] text-pretty">{desc}</p>
             </li>
           ))}
         </ol>

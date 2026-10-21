@@ -77,3 +77,8 @@ a, button { transition: color 150ms, background-color 150ms, border-color 150ms,
 
 /* ─── Sonner toast overrides ─────────────────────────────────────────────── */
 [data-sonner-toaster] { font-family: 'IBM Plex Sans', 'DM Sans', sans-serif !important; }
+
+/* ─── Watermark: on mobile raise it above the 56px tab bar ──────────────── */
+@media (max-width: 767px) {
+  .arc-studio-watermark { bottom: 72px !important; }
+}

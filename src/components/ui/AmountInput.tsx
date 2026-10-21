@@ -55,9 +55,9 @@ export function AmountInput({
           aria-describedby={describedBy}
           aria-invalid={invalid}
           autoComplete="off"
-          className="font-mono flex-1 bg-transparent text-2xl font-semibold tabular-nums text-[var(--ink)] outline-none placeholder:text-[var(--muted)] disabled:opacity-50"
+          className="font-mono min-w-0 flex-1 bg-transparent text-2xl font-semibold tabular-nums text-[var(--ink)] outline-none placeholder:text-[var(--muted)] disabled:opacity-50"
         />
-        <span className="text-sm font-medium text-[var(--muted)]">USDC</span>
+        <span className="shrink-0 text-sm font-medium text-[var(--muted)]">USDC</span>
       </div>
       {balance !== undefined && (
         <div className="flex items-center justify-between text-xs text-[var(--muted)]">

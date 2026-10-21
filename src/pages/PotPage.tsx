@@ -4,18 +4,14 @@
  * - No wallet needed for public view
  * - Sender panel: top up, add payee, remove payee, approve/reject requests, extend, release, reclaim
  * - Beneficiary panel: pay, request payee, view own requests
- * - All writes use useContractAction (no side effects in render)
+ * - All writes use useContractAction (wallet + chain check, pre-flight simulate, revert decode)
  * - Confirm dialogs before destructive/irreversible actions
- * - Distinguishes "loading", "not found" (id === 0), "network error"
  */
 
 import { useState, useEffect } from 'react'
 import { useAccount, useReadContract } from 'wagmi'
 import { erc20Abi } from 'viem'
-import {
-  simulateContract, writeContract, waitForTransactionReceipt, readContract,
-} from '@wagmi/core'
-import { BaseError, ContractFunctionRevertedError, UserRejectedRequestError } from 'viem'
+import { readContract, waitForTransactionReceipt } from '@wagmi/core'
 import {
   ArrowLeft, Share2, Check, ExternalLink, UserPlus, X, CalendarClock,
   Gift, Undo2, Send, ReceiptText, Loader2, RefreshCw, AlertTriangle,
@@ -27,6 +23,7 @@ import {
   USDC_ADDRESS,
 } from '@/earmarkConfig'
 import { usePot, usePayees, usePayments, usePayeeRequests } from '@/hooks/useEarmark'
+import { useContractAction } from '@/hooks/useContractAction'
 import { usePotCreatedTxHash, usePaidEventTxHash } from '@/hooks/useEventTxHash'
 import CategoryBadge from '@/components/CategoryBadge'
 import PotProgress from '@/components/PotProgress'
@@ -45,7 +42,6 @@ import {
   localDateToExpiry, formatExpiry, isValidUsdcAmount,
 } from '@/utils/format'
 import type { Pot, PayeeEntry } from '@/earmarkTypes'
-import { friendlyErrorName } from '@/earmarkTypes'
 import type { Status } from '@/components/ui/StatusBadge'
 
 interface Props {
@@ -58,62 +54,6 @@ function potStatus(pot: Pot): Status {
   if (pot.closed) return 'Closed'
   if (isExpired(pot.expiry)) return 'Ended'
   return 'Open'
-}
-
-
-function extractErr(err: unknown): string {
-  if (err instanceof UserRejectedRequestError) return 'You cancelled in your wallet. Nothing was sent.'
-  if (err instanceof BaseError) {
-    const rej = err.walk((e) => e instanceof UserRejectedRequestError)
-    if (rej) return 'You cancelled in your wallet. Nothing was sent.'
-    const rev = err.walk((e) => e instanceof ContractFunctionRevertedError)
-    if (rev instanceof ContractFunctionRevertedError) {
-      const name = rev.data?.errorName
-      return name ? friendlyErrorName(name) : rev.shortMessage ?? 'Transaction reverted.'
-    }
-    return err.shortMessage ?? err.message
-  }
-  const s = String(err).toLowerCase()
-  if (s.includes('user rejected') || s.includes('4001')) return 'You cancelled in your wallet. Nothing was sent.'
-  return 'Something went wrong. Please try again.'
-}
-
-interface SimpleCall {
-  address: `0x${string}`
-  abi: readonly unknown[]
-  functionName: string
-  args?: readonly unknown[]
-  chainId?: number
-}
-
-// ── Simple single-action hook ─────────────────────────────────────────────────
-function useSimpleAction() {
-  const [loading, setLoading] = useState(false)
-  const [txHash, setTxHash] = useState<`0x${string}` | undefined>()
-  const [error, setError] = useState<string | undefined>()
-  const [done, setDone] = useState(false)
-
-  function reset() { setLoading(false); setTxHash(undefined); setError(undefined); setDone(false) }
-
-  async function run(call: SimpleCall, onSuccess?: () => void) {
-    setLoading(true); setError(undefined); setDone(false)
-    try {
-      // @ts-expect-error – SimpleCall is valid at runtime; gas-param generics don't match statically
-      await simulateContract(config, call)
-      // @ts-expect-error – SimpleCall is valid at runtime; gas-param generics don't match statically
-      const hash = await writeContract(config, call)
-      setTxHash(hash)
-      await waitForTransactionReceipt(config, { hash, chainId: EARMARK_CHAIN_ID })
-      setDone(true)
-      if (onSuccess) onSuccess()
-    } catch (err) {
-      setError(extractErr(err))
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  return { loading, txHash, error, done, run, reset }
 }
 
 // ── PotCreated tx hash for "Created in transaction…" ─────────────────────────
@@ -248,6 +188,9 @@ export default function PotPage({ potId, onBack, onReceipt }: Props) {
             </div>
           </div>
         </div>
+        <p className="mb-3 text-xs text-[var(--muted)]">
+          Read directly from the Arc blockchain. It proves payments from this pot to these addresses; it doesn't prove who owns an address.
+        </p>
         <PotProgress pot={pot} />
         <div className="mt-4 grid grid-cols-3 gap-3 text-center">
           <div>
@@ -316,8 +259,8 @@ export default function PotPage({ potId, onBack, onReceipt }: Props) {
           potId={potId}
           payees={payees ?? []}
           requests={requests ?? []}
-          onRefetchPayments={refetchPayments}
-          onRefetchRequests={refetchRequests}
+          onRefetchPayments={() => void refetchPayments()}
+          onRefetchRequests={() => void refetchRequests()}
           expired={expired}
         />
       )}
@@ -411,7 +354,6 @@ function SenderPanel({ pot, potId, payees, requests, pendingCount, onRefetchPaye
 
       {!pot.closed && (
         <>
-          {/* Pending requests badge */}
           {pendingCount > 0 && (
             <div className="flex items-center gap-2 rounded-input bg-[#E6F0FF] px-3 py-2">
               <span className="inline-flex size-5 items-center justify-center rounded-full bg-[var(--info)] text-[10px] font-semibold text-white">{pendingCount}</span>
@@ -421,7 +363,6 @@ function SenderPanel({ pot, potId, payees, requests, pendingCount, onRefetchPaye
             </div>
           )}
 
-          {/* Action buttons */}
           <div className="flex flex-wrap gap-2">
             <Button variant="secondary" size="sm" onClick={() => setShowTopUp((v) => !v)}>
               Top up
@@ -451,7 +392,6 @@ function SenderPanel({ pot, potId, payees, requests, pendingCount, onRefetchPaye
           {showAddPayee && <AddPayeeForm potId={potId} pot={pot} payees={payees} onDone={() => { setShowAddPayee(false); onRefetchPayees() }} />}
           {showExtend && <ExtendForm potId={potId} currentExpiry={pot.expiry} onDone={() => { setShowExtend(false); onRefetchPot() }} />}
 
-          {/* Pending payee requests */}
           {requests.filter((r) => !r.resolved).length > 0 && (
             <div className="space-y-2">
               <p className="text-xs font-semibold text-[var(--ink)]">Payee requests to review</p>
@@ -469,7 +409,6 @@ function SenderPanel({ pot, potId, payees, requests, pendingCount, onRefetchPaye
             </div>
           )}
 
-          {/* Remove payees */}
           {payees.length > 0 && (
             <div>
               <p className="mb-2 text-xs font-semibold text-[var(--ink-2)]">Remove a payee</p>
@@ -483,7 +422,6 @@ function SenderPanel({ pot, potId, payees, requests, pendingCount, onRefetchPaye
         </>
       )}
 
-      {/* Release dialog */}
       <Dialog open={releaseDialog} onClose={() => setReleaseDialog(false)} title="Give the rest to family">
         <div className="space-y-4">
           <p className="text-sm text-[var(--ink-2)]">
@@ -494,7 +432,6 @@ function SenderPanel({ pot, potId, payees, requests, pendingCount, onRefetchPaye
         </div>
       </Dialog>
 
-      {/* Reclaim dialog */}
       <Dialog open={reclaimDialog} onClose={() => setReclaimDialog(false)} title="Take back unspent money">
         <div className="space-y-4">
           <p className="text-sm text-[var(--ink-2)]">
@@ -553,7 +490,6 @@ function BeneficiaryPanel({ pot, potId, payees, requests, onRefetchPayments, onR
           potId={potId}
           payees={payees}
           balance={pot.balance}
-          pot={pot}
           onDone={() => { setShowPay(false); onRefetchPayments() }}
         />
       )}
@@ -567,7 +503,6 @@ function BeneficiaryPanel({ pot, potId, payees, requests, onRefetchPayments, onR
         />
       )}
 
-      {/* My requests */}
       {requests.length > 0 && (
         <div>
           <p className="mb-2 text-xs font-semibold text-[var(--ink-2)]">Your payee requests</p>
@@ -628,24 +563,36 @@ function TopUpForm({ potId, onDone }: { potId: bigint; onDone: () => void }) {
           args: [EARMARK_ADDRESS, rawAmt], chainId: EARMARK_CHAIN_ID,
         }
         // @ts-expect-error – approveCall is valid at runtime; gas-param generics don't match statically
-        const ah = await writeContract(config, approveCall)
+        const ah = await (await import('@wagmi/core')).writeContract(config, approveCall)
         await waitForTransactionReceipt(config, { hash: ah, chainId: EARMARK_CHAIN_ID })
       }
       const topUpCall = {
         address: EARMARK_ADDRESS, abi: EARMARK_ABI, functionName: 'topUp',
         args: [potId, rawAmt], chainId: EARMARK_CHAIN_ID,
       }
+      const { simulateContract: simulate, writeContract: write } = await import('@wagmi/core')
       // @ts-expect-error – topUpCall is valid at runtime; gas-param generics don't match statically
-      await simulateContract(config, topUpCall)
+      await simulate(config, topUpCall)
       // @ts-expect-error – topUpCall is valid at runtime; gas-param generics don't match statically
-      const hash = await writeContract(config, topUpCall)
+      const hash = await write(config, topUpCall)
       setTxHash(hash)
-      await waitForTransactionReceipt(config, { hash, chainId: EARMARK_CHAIN_ID })
+      const receipt = await waitForTransactionReceipt(config, { hash, chainId: EARMARK_CHAIN_ID })
+      if (receipt.status === 'reverted') {
+        setPhase('failed'); setErrMsg('Top up was reverted by the contract.')
+        return
+      }
       setPhase('done')
       toast.success('Pot topped up!')
       onDone()
     } catch (err) {
-      setPhase('failed'); setErrMsg(extractErr(err))
+      setPhase('failed')
+      const msg = err instanceof Error ? err.message : String(err)
+      const s = msg.toLowerCase()
+      if (s.includes('user rejected') || s.includes('user denied') || s.includes('4001')) {
+        setErrMsg('You cancelled in your wallet. Nothing was sent.')
+      } else {
+        setErrMsg('Something went wrong. Please try again.')
+      }
     }
   }
 
@@ -670,24 +617,27 @@ function AddPayeeForm({ potId, pot, payees, onDone }: { potId: bigint; pot: Pot;
   const [rawAddr, setRawAddr] = useState('')
   const [checksumAddr, setChecksumAddr] = useState<`0x${string}` | null>(null)
   const [label, setLabel] = useState('')
-  const [err, setErr] = useState<string | undefined>()
-  const { loading, txHash, error, done, run } = useSimpleAction()
+  const [valErr, setValErr] = useState<string | undefined>()
+  const action = useContractAction()
 
-  useEffect(() => { if (done) { onDone() } }, [done, onDone])
+  useEffect(() => {
+    if (action.state === 'confirmed') { onDone() }
+  }, [action.state, onDone])
 
   async function handleAdd() {
-    if (!checksumAddr) { setErr('Enter a valid address.'); return }
-    if (!label.trim()) { setErr('Enter a label.'); return }
-    if (label.length > 48) { setErr('Label must be 48 characters or fewer.'); return }
-    if (checksumAddr.toLowerCase() === pot.sender.toLowerCase()) { setErr('The sender cannot be a payee.'); return }
-    if (checksumAddr.toLowerCase() === pot.beneficiary.toLowerCase()) { setErr('The family member cannot be a payee.'); return }
-    if (payees.some((p) => p.address.toLowerCase() === checksumAddr.toLowerCase())) { setErr('This address is already an approved payee.'); return }
-    setErr(undefined)
-    await run({
-      address: EARMARK_ADDRESS, abi: EARMARK_ABI, functionName: 'addPayee',
-      args: [potId, checksumAddr, label], chainId: EARMARK_CHAIN_ID,
+    if (!checksumAddr) { setValErr('Enter a valid address.'); return }
+    if (!label.trim()) { setValErr('Enter a label.'); return }
+    if (label.length > 48) { setValErr('Label must be 48 characters or fewer.'); return }
+    if (checksumAddr.toLowerCase() === pot.sender.toLowerCase()) { setValErr('The sender cannot be a payee.'); return }
+    if (checksumAddr.toLowerCase() === pot.beneficiary.toLowerCase()) { setValErr('The family member cannot be a payee.'); return }
+    if (payees.some((p) => p.address.toLowerCase() === checksumAddr.toLowerCase())) { setValErr('This address is already an approved payee.'); return }
+    setValErr(undefined)
+    await action.execute({
+      contractCall: { address: EARMARK_ADDRESS, abi: EARMARK_ABI, functionName: 'addPayee', args: [potId, checksumAddr, label], chainId: EARMARK_CHAIN_ID },
     })
   }
+
+  const err = valErr ?? action.errorMessage
 
   return (
     <div className="space-y-3 rounded-card border border-[var(--line)] bg-[var(--surface)] p-4">
@@ -706,10 +656,10 @@ function AddPayeeForm({ potId, pot, payees, onDone }: { potId: bigint; pot: Pot;
         <label className="mb-1 block text-xs text-[var(--muted)]">Wallet address</label>
         <AddressInput value={rawAddr} onChange={(raw, cs) => { setRawAddr(raw); setChecksumAddr(cs) }} placeholder="0x…" />
       </div>
-      {(err || error) && <p role="alert" className="text-xs text-danger">{err ?? error}</p>}
-      {txHash && <TxStatus state={loading ? 'submitted' : 'confirmed'} txHash={txHash} />}
+      {err && <p role="alert" className="text-xs text-danger">{err}</p>}
+      {action.txHash && <TxStatus state={action.state} txHash={action.txHash} />}
       <div className="flex gap-2">
-        <Button size="sm" loading={loading} loadingLabel="Adding…" onClick={() => void handleAdd()} className="flex-1">
+        <Button size="sm" loading={action.isBusy} loadingLabel="Adding…" onClick={() => void handleAdd()} className="flex-1">
           Add payee
         </Button>
         <Button variant="secondary" size="sm" onClick={onDone}>Cancel</Button>
@@ -720,8 +670,21 @@ function AddPayeeForm({ potId, pot, payees, onDone }: { potId: bigint; pot: Pot;
 
 // ── RemovePayeeRow ────────────────────────────────────────────────────────────
 function RemovePayeeRow({ potId, payee, onRemoved }: { potId: bigint; payee: PayeeEntry; onRemoved: () => void }) {
-  const { loading, txHash: _txHash, error: _error, done, run, reset } = useSimpleAction()
-  useEffect(() => { if (done) { onRemoved(); reset() } }, [done, onRemoved, reset])
+  const [confirmOpen, setConfirmOpen] = useState(false)
+  const action = useContractAction()
+
+  function handleConfirm() {
+    void action.execute({
+      contractCall: {
+        address: EARMARK_ADDRESS, abi: EARMARK_ABI, functionName: 'removePayee',
+        args: [potId, payee.address], chainId: EARMARK_CHAIN_ID,
+      },
+      onSuccess: () => {
+        setConfirmOpen(false)
+        onRemoved()
+      },
+    })
+  }
 
   return (
     <li className="flex items-center justify-between rounded-input bg-[var(--surface)] px-3 py-2">
@@ -732,15 +695,38 @@ function RemovePayeeRow({ potId, payee, onRemoved }: { potId: bigint; payee: Pay
       <Button
         variant="danger"
         size="sm"
-        loading={loading}
+        loading={action.isBusy}
         aria-label={`Remove ${payee.label}`}
-        onClick={() => void run({
-          address: EARMARK_ADDRESS, abi: EARMARK_ABI, functionName: 'removePayee',
-          args: [potId, payee.address], chainId: EARMARK_CHAIN_ID,
-        }, () => { toast.success('Payee removed'); onRemoved() })}
+        onClick={() => { action.reset(); setConfirmOpen(true) }}
       >
         <X className="size-3.5" aria-hidden />
       </Button>
+
+      <Dialog open={confirmOpen} onClose={() => { setConfirmOpen(false); action.reset() }} title="Remove payee">
+        <div className="space-y-4">
+          <p className="text-sm text-[var(--ink-2)]">
+            Remove <strong>{payee.label}</strong>? Your family won't be able to pay this address from this pot.
+          </p>
+          <p className="font-mono text-xs text-[var(--muted)] break-all">{payee.address}</p>
+          {action.errorMessage && (
+            <p role="alert" className="text-xs text-danger">{action.errorMessage}</p>
+          )}
+          {action.txHash && <TxStatus state={action.state} txHash={action.txHash} />}
+          <div className="flex gap-2">
+            <Button
+              variant="danger"
+              size="sm"
+              className="flex-1"
+              loading={action.isBusy}
+              loadingLabel="Removing…"
+              onClick={handleConfirm}
+            >
+              Remove payee
+            </Button>
+            <Button variant="secondary" size="sm" onClick={() => { setConfirmOpen(false); action.reset() }}>Cancel</Button>
+          </div>
+        </div>
+      </Dialog>
     </li>
   )
 }
@@ -752,18 +738,20 @@ function PayeeRequestCard({ potId, req, requestId, onResolved }: {
   requestId: bigint;
   onResolved: () => void;
 }) {
-  const approveAction = useSimpleAction()
-  const rejectAction = useSimpleAction()
+  const approveAction = useContractAction()
+  const rejectAction = useContractAction()
   const [confirmApprove, setConfirmApprove] = useState(false)
 
   useEffect(() => {
-    if (approveAction.done) { onResolved(); approveAction.reset() }
-    if (rejectAction.done) { onResolved(); rejectAction.reset() }
+    if (approveAction.state === 'confirmed' || rejectAction.state === 'confirmed') {
+      onResolved()
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [approveAction.done, rejectAction.done])
+  }, [approveAction.state, rejectAction.state])
 
   const tx = { address: EARMARK_ADDRESS, abi: EARMARK_ABI, chainId: EARMARK_CHAIN_ID } as const
-  const busy = approveAction.loading || rejectAction.loading
+  const busy = approveAction.isBusy || rejectAction.isBusy
+  const err = approveAction.errorMessage ?? rejectAction.errorMessage
 
   return (
     <div className="rounded-card border border-[#DCE8F5] bg-[var(--surface)] p-3 space-y-2">
@@ -773,14 +761,12 @@ function PayeeRequestCard({ potId, req, requestId, onResolved }: {
         </p>
         {req.reason && <p className="text-xs italic text-[var(--muted)]">"{req.reason}"</p>}
       </div>
-      {(approveAction.error || rejectAction.error) && (
-        <p role="alert" className="text-xs text-danger">{approveAction.error ?? rejectAction.error}</p>
-      )}
+      {err && <p role="alert" className="text-xs text-danger">{err}</p>}
       <div className="flex gap-2">
         <Button
           size="sm"
           className="flex-1 bg-[var(--success)] hover:opacity-90"
-          loading={approveAction.loading}
+          loading={approveAction.isBusy}
           loadingLabel="Approving…"
           disabled={busy}
           onClick={() => setConfirmApprove(true)}
@@ -791,10 +777,13 @@ function PayeeRequestCard({ potId, req, requestId, onResolved }: {
           variant="danger"
           size="sm"
           className="flex-1"
-          loading={rejectAction.loading}
+          loading={rejectAction.isBusy}
           loadingLabel="Rejecting…"
           disabled={busy}
-          onClick={() => void rejectAction.run({ ...tx, functionName: 'rejectPayeeRequest', args: [potId, requestId] }, () => { toast.success('Request rejected'); onResolved() })}
+          onClick={() => void rejectAction.execute({
+            contractCall: { ...tx, functionName: 'rejectPayeeRequest', args: [potId, requestId] },
+            onSuccess: () => { toast.success('Request rejected'); onResolved() },
+          })}
         >
           <X className="size-3.5" aria-hidden /> Reject
         </Button>
@@ -813,11 +802,14 @@ function PayeeRequestCard({ potId, req, requestId, onResolved }: {
             <Button
               size="sm"
               className="flex-1 bg-[var(--success)] hover:opacity-90"
-              loading={approveAction.loading}
+              loading={approveAction.isBusy}
               loadingLabel="Approving…"
               onClick={() => {
                 setConfirmApprove(false)
-                void approveAction.run({ ...tx, functionName: 'approvePayeeRequest', args: [potId, requestId] }, () => { toast.success('Payee approved'); onResolved() })
+                void approveAction.execute({
+                  contractCall: { ...tx, functionName: 'approvePayeeRequest', args: [potId, requestId] },
+                  onSuccess: () => { toast.success('Payee approved'); onResolved() },
+                })
               }}
             >
               Approve payee
@@ -833,28 +825,31 @@ function PayeeRequestCard({ potId, req, requestId, onResolved }: {
 // ── ExtendForm ────────────────────────────────────────────────────────────────
 function ExtendForm({ potId, currentExpiry, onDone }: { potId: bigint; currentExpiry: bigint; onDone: () => void }) {
   const [newDate, setNewDate] = useState('')
-  const [err, setErr] = useState<string | undefined>()
-  const { loading, txHash, error, done, run } = useSimpleAction()
-  useEffect(() => { if (done) { toast.success('End date extended!'); onDone() } }, [done, onDone])
+  const [valErr, setValErr] = useState<string | undefined>()
+  const action = useContractAction()
+
+  useEffect(() => {
+    if (action.state === 'confirmed') { toast.success('End date extended!'); onDone() }
+  }, [action.state, onDone])
 
   const minDate = new Date((Number(currentExpiry) + 86400) * 1000).toISOString().split('T')[0]
   const previewLabel = newDate ? formatExpiry(localDateToExpiry(newDate)) : ''
+  const err = valErr ?? action.errorMessage
 
   async function handleExtend() {
-    if (!newDate) { setErr('Select a date.'); return }
+    if (!newDate) { setValErr('Select a date.'); return }
     const ts = localDateToExpiry(newDate)
-    if (ts <= currentExpiry) { setErr('New date must be later than the current end date.'); return }
-    setErr(undefined)
-    await run({
-      address: EARMARK_ADDRESS, abi: EARMARK_ABI, functionName: 'extendExpiry',
-      args: [potId, ts], chainId: EARMARK_CHAIN_ID,
+    if (ts <= currentExpiry) { setValErr('New date must be later than the current end date.'); return }
+    setValErr(undefined)
+    await action.execute({
+      contractCall: { address: EARMARK_ADDRESS, abi: EARMARK_ABI, functionName: 'extendExpiry', args: [potId, ts], chainId: EARMARK_CHAIN_ID },
     })
   }
 
   return (
     <div className="space-y-3 rounded-card border border-[var(--line)] bg-[var(--surface)] p-4">
       <p className="text-xs font-semibold text-[var(--ink)]">Extend end date</p>
-      <Field label="New end date" help={previewLabel || `Must be after ${formatDate(currentExpiry)}`} error={err ?? error}>
+      <Field label="New end date" help={previewLabel || `Must be after ${formatDate(currentExpiry)}`} error={err}>
         {({ id, ...rest }) => (
           <input
             id={id}
@@ -867,9 +862,9 @@ function ExtendForm({ potId, currentExpiry, onDone }: { potId: bigint; currentEx
           />
         )}
       </Field>
-      {txHash && <TxStatus state={loading ? 'submitted' : 'confirmed'} txHash={txHash} />}
+      {action.txHash && <TxStatus state={action.state} txHash={action.txHash} />}
       <div className="flex gap-2">
-        <Button size="sm" loading={loading} loadingLabel="Extending…" onClick={() => void handleExtend()} className="flex-1">
+        <Button size="sm" loading={action.isBusy} loadingLabel="Extending…" onClick={() => void handleExtend()} className="flex-1">
           <CalendarClock className="size-3.5" aria-hidden /> Extend
         </Button>
         <Button variant="secondary" size="sm" onClick={onDone}>Cancel</Button>
@@ -880,18 +875,23 @@ function ExtendForm({ potId, currentExpiry, onDone }: { potId: bigint; currentEx
 
 // ── ReleaseAction ─────────────────────────────────────────────────────────────
 function ReleaseAction({ potId, onDone }: { potId: bigint; onDone: () => void }) {
-  const { loading, txHash, error, done, run } = useSimpleAction()
-  useEffect(() => { if (done) { toast.success('Released to family!'); onDone() } }, [done, onDone])
+  const action = useContractAction()
+  useEffect(() => {
+    if (action.state === 'confirmed') { toast.success('Released to family!'); onDone() }
+  }, [action.state, onDone])
   return (
     <div className="space-y-3">
-      {error && <p role="alert" className="text-xs text-danger">{error}</p>}
-      {txHash && <TxStatus state={loading ? 'submitted' : 'confirmed'} txHash={txHash} />}
+      {action.errorMessage && <p role="alert" className="text-xs text-danger">{action.errorMessage}</p>}
+      {action.txHash && <TxStatus state={action.state} txHash={action.txHash} />}
       <Button
         size="sm"
         className="w-full bg-[var(--success)] hover:opacity-90"
-        loading={loading}
+        loading={action.isBusy}
         loadingLabel="Releasing…"
-        onClick={() => void run({ address: EARMARK_ADDRESS, abi: EARMARK_ABI, functionName: 'releaseToBeneficiary', args: [potId], chainId: EARMARK_CHAIN_ID }, onDone)}
+        onClick={() => void action.execute({
+          contractCall: { address: EARMARK_ADDRESS, abi: EARMARK_ABI, functionName: 'releaseToBeneficiary', args: [potId], chainId: EARMARK_CHAIN_ID },
+          onSuccess: onDone,
+        })}
       >
         <Gift className="size-4" aria-hidden /> Give the rest to family
       </Button>
@@ -901,19 +901,24 @@ function ReleaseAction({ potId, onDone }: { potId: bigint; onDone: () => void })
 
 // ── ReclaimAction ─────────────────────────────────────────────────────────────
 function ReclaimAction({ potId, onDone }: { potId: bigint; onDone: () => void }) {
-  const { loading, txHash, error, done, run } = useSimpleAction()
-  useEffect(() => { if (done) { toast.success('Reclaimed!'); onDone() } }, [done, onDone])
+  const action = useContractAction()
+  useEffect(() => {
+    if (action.state === 'confirmed') { toast.success('Reclaimed!'); onDone() }
+  }, [action.state, onDone])
   return (
     <div className="space-y-3">
-      {error && <p role="alert" className="text-xs text-danger">{error}</p>}
-      {txHash && <TxStatus state={loading ? 'submitted' : 'confirmed'} txHash={txHash} />}
+      {action.errorMessage && <p role="alert" className="text-xs text-danger">{action.errorMessage}</p>}
+      {action.txHash && <TxStatus state={action.state} txHash={action.txHash} />}
       <Button
         variant="danger"
         size="sm"
         className="w-full"
-        loading={loading}
+        loading={action.isBusy}
         loadingLabel="Reclaiming…"
-        onClick={() => void run({ address: EARMARK_ADDRESS, abi: EARMARK_ABI, functionName: 'reclaim', args: [potId], chainId: EARMARK_CHAIN_ID }, onDone)}
+        onClick={() => void action.execute({
+          contractCall: { address: EARMARK_ADDRESS, abi: EARMARK_ABI, functionName: 'reclaim', args: [potId], chainId: EARMARK_CHAIN_ID },
+          onSuccess: onDone,
+        })}
       >
         <Undo2 className="size-4" aria-hidden /> Take back unspent money
       </Button>
@@ -922,35 +927,40 @@ function ReclaimAction({ potId, onDone }: { potId: bigint; onDone: () => void })
 }
 
 // ── PayForm ───────────────────────────────────────────────────────────────────
-function PayForm({ potId, payees, balance, pot: _pot, onDone }: { potId: bigint; payees: PayeeEntry[]; balance: bigint; pot: Pot; onDone: () => void }) {
+function PayForm({ potId, payees, balance, onDone }: { potId: bigint; payees: PayeeEntry[]; balance: bigint; onDone: () => void }) {
   const [selectedPayee, setSelectedPayee] = useState<`0x${string}` | ''>('')
   const [amount, setAmount] = useState('')
   const [memo, setMemo] = useState('')
   const [confirmOpen, setConfirmOpen] = useState(false)
-  const [err, setErr] = useState<string | undefined>()
-  const { loading, txHash, error, done, run } = useSimpleAction()
-  useEffect(() => { if (done) { toast.success('Payment sent!'); onDone() } }, [done, onDone])
+  const [valErr, setValErr] = useState<string | undefined>()
+  const action = useContractAction()
+  useEffect(() => {
+    if (action.state === 'confirmed') { toast.success('Payment sent!'); onDone() }
+  }, [action.state, onDone])
 
   const rawAmount = parseUsdc(amount)
   const overBalance = rawAmount > balance
   const payeeEntry = payees.find((p) => p.address === selectedPayee)
   const afterBalance = balance - rawAmount
+  const err = valErr ?? action.errorMessage
 
   function handleSubmit() {
-    if (!selectedPayee) { setErr('Choose a payee.'); return }
-    if (!isValidUsdcAmount(amount)) { setErr('Enter a valid amount.'); return }
-    if (overBalance) { setErr('Amount exceeds the pot balance.'); return }
-    if (memo.length > 140) { setErr('Memo must be 140 characters or fewer.'); return }
-    setErr(undefined)
+    if (!selectedPayee) { setValErr('Choose a payee.'); return }
+    if (!isValidUsdcAmount(amount)) { setValErr('Enter a valid amount.'); return }
+    if (overBalance) { setValErr('Amount exceeds the pot balance.'); return }
+    if (memo.length > 140) { setValErr('Memo must be 140 characters or fewer.'); return }
+    setValErr(undefined)
     setConfirmOpen(true)
   }
 
   function handleConfirm() {
     setConfirmOpen(false)
-    void run({
-      address: EARMARK_ADDRESS, abi: EARMARK_ABI, functionName: 'pay',
-      args: [potId, selectedPayee, rawAmount, memo],
-      chainId: EARMARK_CHAIN_ID,
+    void action.execute({
+      contractCall: {
+        address: EARMARK_ADDRESS, abi: EARMARK_ABI, functionName: 'pay',
+        args: [potId, selectedPayee, rawAmount, memo],
+        chainId: EARMARK_CHAIN_ID,
+      },
     })
   }
 
@@ -958,7 +968,6 @@ function PayForm({ potId, payees, balance, pot: _pot, onDone }: { potId: bigint;
     <div className="space-y-4 rounded-card border border-[var(--line)] bg-[var(--surface)] p-4">
       <p className="text-xs font-semibold text-[var(--ink)]">Make a payment</p>
 
-      {/* Payee radio list */}
       <div>
         <p className="mb-2 text-xs text-[var(--muted)]">Pay to</p>
         <ul className="space-y-2" role="radiogroup" aria-label="Approved payees">
@@ -998,17 +1007,16 @@ function PayForm({ potId, payees, balance, pot: _pot, onDone }: { potId: bigint;
         />
       </div>
 
-      {(err || error) && <p role="alert" className="text-xs text-danger">{err ?? error}</p>}
-      {txHash && <TxStatus state={loading ? 'submitted' : 'confirmed'} txHash={txHash} />}
+      {err && <p role="alert" className="text-xs text-danger">{err}</p>}
+      {action.txHash && <TxStatus state={action.state} txHash={action.txHash} />}
 
       <div className="flex gap-2">
-        <Button size="sm" loading={loading} loadingLabel="Sending…" onClick={() => void handleSubmit()} className="flex-1" disabled={overBalance || rawAmount === 0n}>
+        <Button size="sm" loading={action.isBusy} loadingLabel="Sending…" onClick={() => void handleSubmit()} className="flex-1" disabled={overBalance || rawAmount === 0n}>
           <Send className="size-3.5" aria-hidden /> {payeeEntry ? `Pay ${payeeEntry.label}` : 'Send payment'}
         </Button>
         <Button variant="secondary" size="sm" onClick={onDone}>Cancel</Button>
       </div>
 
-      {/* Confirm dialog */}
       <Dialog open={confirmOpen} onClose={() => setConfirmOpen(false)} title="Confirm payment">
         <div className="space-y-3">
           <div className="rounded-input bg-[var(--surface-2)] p-3 space-y-1.5 text-sm">
@@ -1052,32 +1060,34 @@ function RequestPayeeForm({ potId, pot, payees, onDone }: { potId: bigint; pot: 
   const [checksumAddr, setChecksumAddr] = useState<`0x${string}` | null>(null)
   const [label, setLabel] = useState('')
   const [reason, setReason] = useState('')
-  const [err, setErr] = useState<string | undefined>()
-  const { loading, txHash, error, done, run } = useSimpleAction()
-  useEffect(() => { if (done) { toast.success('Request sent!'); onDone() } }, [done, onDone])
+  const [valErr, setValErr] = useState<string | undefined>()
+  const action = useContractAction()
+  useEffect(() => {
+    if (action.state === 'confirmed') { toast.success('Request sent!'); onDone() }
+  }, [action.state, onDone])
+
+  const err = valErr ?? action.errorMessage
 
   async function handleRequest() {
-    if (!checksumAddr) { setErr('Enter a valid address.'); return }
-    if (!label.trim()) { setErr('Enter a label.'); return }
-    if (label.length > 48) { setErr('Label must be 48 characters or fewer.'); return }
-    if (reason.length > 140) { setErr('Reason must be 140 characters or fewer.'); return }
-    // Client-side guards
+    if (!checksumAddr) { setValErr('Enter a valid address.'); return }
+    if (!label.trim()) { setValErr('Enter a label.'); return }
+    if (label.length > 48) { setValErr('Label must be 48 characters or fewer.'); return }
+    if (reason.length > 140) { setValErr('Reason must be 140 characters or fewer.'); return }
     if (checksumAddr.toLowerCase() === pot.sender.toLowerCase()) {
-      setErr("That's the sender. Earmark only pays outside payees — that's what keeps the money tied to its purpose."); return
+      setValErr("That's the sender. Earmark only pays outside payees — that's what keeps the money tied to its purpose."); return
     }
     if (checksumAddr.toLowerCase() === pot.beneficiary.toLowerCase()) {
-      setErr("That's the family member. Earmark only pays outside payees — that's what keeps the money tied to its purpose."); return
+      setValErr("That's the family member. Earmark only pays outside payees — that's what keeps the money tied to its purpose."); return
     }
     if (payees.some((p) => p.address.toLowerCase() === checksumAddr.toLowerCase())) {
-      setErr('This payee is already approved.'); return
+      setValErr('This payee is already approved.'); return
     }
     if (connectedAddress && checksumAddr.toLowerCase() === connectedAddress.toLowerCase()) {
-      setErr("You can't request yourself as a payee."); return
+      setValErr("You can't request yourself as a payee."); return
     }
-    setErr(undefined)
-    await run({
-      address: EARMARK_ADDRESS, abi: EARMARK_ABI, functionName: 'requestPayee',
-      args: [potId, checksumAddr, label, reason], chainId: EARMARK_CHAIN_ID,
+    setValErr(undefined)
+    await action.execute({
+      contractCall: { address: EARMARK_ADDRESS, abi: EARMARK_ABI, functionName: 'requestPayee', args: [potId, checksumAddr, label, reason], chainId: EARMARK_CHAIN_ID },
     })
   }
 
@@ -1106,10 +1116,10 @@ function RequestPayeeForm({ potId, pot, payees, onDone }: { potId: bigint; pot: 
           className="w-full rounded-input border border-[var(--line)] bg-[var(--surface-2)] px-3 py-2 text-sm text-[var(--ink)] placeholder:text-[var(--muted)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)]"
         />
       </div>
-      {(err || error) && <p role="alert" className="text-xs text-danger">{err ?? error}</p>}
-      {txHash && <TxStatus state={loading ? 'submitted' : 'confirmed'} txHash={txHash} />}
+      {err && <p role="alert" className="text-xs text-danger">{err}</p>}
+      {action.txHash && <TxStatus state={action.state} txHash={action.txHash} />}
       <div className="flex gap-2">
-        <Button size="sm" loading={loading} loadingLabel="Sending…" onClick={() => void handleRequest()} className="flex-1">
+        <Button size="sm" loading={action.isBusy} loadingLabel="Sending…" onClick={() => void handleRequest()} className="flex-1">
           Send request
         </Button>
         <Button variant="secondary" size="sm" onClick={onDone}>Cancel</Button>
