@@ -55,8 +55,8 @@ function routeToHash(page: Page, potId?: bigint, paymentIndex?: number): string 
 
 // ── Nav items ────────────────────────────────────────────────────────────────
 const NAV = [
-  { page: 'send'     as Page, label: 'Send money',    Icon: Send     },
-  { page: 'sent'     as Page, label: 'Pots I sent',   Icon: PiggyBank},
+  { page: 'send'     as Page, label: 'Create a pot',  Icon: Send     },
+  { page: 'sent'     as Page, label: 'Pots I fund',   Icon: PiggyBank},
   { page: 'received' as Page, label: 'Pots for me',   Icon: Inbox    },
 ]
 

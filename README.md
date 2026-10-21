@@ -1,116 +1,68 @@
 # Earmark
 
-> Built with Arc Studio — money-powered apps in minutes
+Money with a purpose. Earmark lets a **funder** lock USDC into a pot for one expense. The **recipient** can only pay the **approved payees** the funder authorises — and every payment leaves a public receipt on Arc.
 
-**Earmark** is a purpose-locked USDC remittance app. A sender funds a "pot" (money set aside for one purpose) for a family member; the family member can only pay to sender-approved payees (schools, landlords, clinics). Every payment is recorded on-chain with a public receipt.
+## Use cases
 
-**The contract only lets a pot pay addresses the sender approved. Earmark can't verify who owns an address — get the school's or landlord's wallet directly from them before adding it as a payee.**
+- **Money sent home** — school fees, rent, medical bills, recurring household expenses.
+- **Staff allowances and per diems** — travel budgets, field expense accounts, project petty cash.
+- **Grants and scholarships** — tuition paid directly to institutions, research budgets with approved suppliers.
+- **Supplier and project budgets** — contractor payments tied to a project, milestone-gated disbursements.
 
----
+## How it works
 
-## What Earmark does and doesn't do
+| Role | Who they are | What they can do |
+|---|---|---|
+| **Funder** | Creates and funds the pot | Approve payees, top up, extend end date, release or reclaim |
+| **Recipient** | The person the pot is for | Pay approved payees, request new payees |
+| **Approved payee** | A school, supplier, clinic, landlord | Receive payments from the pot |
 
-**Does:**
-- Only lets the pot pay addresses you approved
-- Records every payment on Arc with a memo and a public receipt
-- Returns unspent money to you after the end date
+1. **Funder creates a pot.** Sets title, category, amount, end date, and at least one approved payee.
+2. **Funder approves payees.** Only approved addresses can receive money. Recipient can request additions; funder decides.
+3. **Recipient pays.** Picks a payee, enters amount and optional memo. Payment goes on-chain with a public receipt.
 
-**Doesn't:**
-- Verify who owns an address (the sender must confirm this)
-- Reverse a confirmed payment
-- Work with tokens other than USDC
+After the end date the funder can take back unspent money. At any time the funder can release the remaining balance to the recipient.
 
----
+## Contract
 
-## Tech stack
+- **Network:** Arc Testnet (chain ID 5042002) / Arc Mainnet (chain ID 5042)
+- **USDC:** `0x3600000000000000000000000000000000000000`
+- **Earmark contract:** see `VITE_EARMARK_ADDRESS` in `.env`
+- **Tests:** 61 Foundry tests (run `cd contracts && forge test`)
+- **Status:** Experimental. Not professionally audited. Use small amounts.
 
-- Frontend: React 18, Vite, TypeScript, Tailwind CSS v3, IBM Plex Sans/Mono
-- Web3: wagmi v2, viem, ConnectKit
-- Contracts: Solidity 0.8.28 + Foundry
-- Wallet: injected (MetaMask, Rabby, etc.)
-- Default chain: Arc Testnet (Chain ID 5042002)
-- Mainnet chain: Arc Mainnet (Chain ID 5042)
-- Token: USDC (6 decimals), address `0x3600000000000000000000000000000000000000` (same on both networks)
+## Quick start
 
----
+```bash
+bun install
+bun run dev       # Vite dev server on :5173
+```
 
-## Key files
+Set `VITE_EARMARK_ADDRESS` in `.env` to the deployed contract address.
+Set `VITE_EARMARK_FROM_BLOCK` to the deploy block (reduces log scan range).
 
-| File | Description |
-|---|---|
-| `src/App.tsx` | SPA hash router and app shell |
-| `src/earmarkConfig.ts` | Network/contract config (driven by `VITE_NETWORK`) |
-| `src/earmarkTypes.ts` | Shared types and friendly error messages (switch on error name) |
-| `src/hooks/useEarmark.ts` | wagmi read hooks (30 s refetch interval) |
-| `src/hooks/useContractAction.ts` | Shared write hook: idle → checking → awaitingSignature → submitted → confirmed/failed |
-| `src/hooks/useEventTxHash.ts` | Chunked event log scan for Paid and PotCreated tx hashes |
-| `src/pages/HomePage.tsx` | Landing page |
-| `src/pages/CreatePotPage.tsx` | Create pot (with allowance check, 2-step indicator, local-tz expiry) |
-| `src/pages/MyPotsPage.tsx` | Compact list of pots I sent |
-| `src/pages/ForMePage.tsx` | Compact list of pots for me |
-| `src/pages/PotPage.tsx` | Role-aware pot detail page (public + sender + beneficiary panels) |
-| `src/pages/ReceiptPage.tsx` | Public payment receipt |
-| `src/pages/HowItWorksPage.tsx` | Glossary, 3-step walkthrough, FAQs |
-| `src/components/ui/` | Design system components: Button, Field, Card, StatusBadge, AddressChip, AddressInput, AmountInput, Dialog, Stepper, EmptyState, TxStatus |
-| `src/utils/format.ts` | USDC formatting, address checksum, date/tz helpers |
-| `contracts/Earmark.sol` | Smart contract |
-| `contracts/test/Earmark.t.sol` | 61 Foundry tests (all passing) |
+```bash
+bun run build     # Production build → dist/
+cd contracts && forge test   # 61 tests
+```
 
----
-
-## Routes (hash-based)
+## URL scheme (hash routing)
 
 | Hash | Page |
 |---|---|
 | `#/` | Home |
 | `#/send` | Create a pot |
-| `#/sent` | Pots I sent |
+| `#/sent` | Pots I fund |
 | `#/received` | Pots for me |
-| `#/pot/:id` | Pot detail (public, no wallet needed) |
-| `#/receipt/:potId/:index` | Payment receipt (public, no wallet needed) |
+| `#/pot/:id` | Pot detail (public, no wallet required) |
+| `#/receipt/:potId/:index` | Payment receipt (public) |
 | `#/how` | How it works |
 
-Old path-style URLs (`/pot/:id`, `/receipt/:a/:b`) still resolve (the server falls back to `index.html`).
+## Roadmap
 
----
+These features are **planned, not built**:
 
-## Contract deployments
-
-| Network | Address | Explorer |
-|---|---|---|
-| Arc Testnet | `0x7d5b050e1c3fd772cacc1e59d3381b5c30b9d566` | https://explorer.testnet.arc.io/address/0x7d5b050e1c3fd772cacc1e59d3381b5c30b9d566 |
-| Arc Mainnet | (not yet deployed) | https://explorer.arc.io |
-
----
-
-## Environment variables
-
-```
-VITE_NETWORK=testnet                      # or mainnet
-VITE_EARMARK_ADDRESS=0x...               # deployed contract address
-VITE_EARMARK_FROM_BLOCK=0                # deployment block for event log scans
-```
-
----
-
-## Running locally
-
-```bash
-bun install
-bun run dev
-```
-
-## Building
-
-```bash
-bun run build              # vite production build → dist/
-bun run contracts:build    # forge build
-bun run contracts:test     # forge test (61 tests, all pass)
-bun run check              # lint + typecheck
-```
-
----
-
-## Disclaimer
-
-Experimental — not professionally audited. Use small amounts.
+- **Sign in with Google (embedded wallets)** — recipients and payees can use a familiar login flow instead of needing a crypto wallet.
+- **Gas sponsorship** — new users can receive payments and make actions with zero USDC, removing the gas barrier on Arc.
+- **Shareable recipient ID** — a human-readable link (QR or short URL) a recipient can send to funders instead of a raw wallet address.
+- **Local-currency cash-out partners** — integration with remittance providers so recipients can convert USDC payouts to local currency at the last mile.

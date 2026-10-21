@@ -49,7 +49,7 @@ export default function MyPotsPage({ onViewPot }: Props) {
         <EmptyState
           icon={<PiggyBank className="size-6" />}
           title="Connect your wallet"
-          description="Connect your wallet to see the pots you've sent."
+          description="Connect your wallet to see the pots you fund."
         />
       </main>
     )
@@ -67,16 +67,16 @@ export default function MyPotsPage({ onViewPot }: Props) {
 
   return (
     <main className="mx-auto max-w-content px-4 pb-32 pt-6 md:pb-16">
-      <h1 className="display mb-6 text-2xl font-semibold text-[var(--ink)]">Pots I sent</h1>
+      <h1 className="display mb-6 text-2xl font-semibold text-[var(--ink)]">Pots I fund</h1>
 
       {validPots.length === 0 ? (
         <EmptyState
           icon={<PiggyBank className="size-6" />}
           title="No pots yet"
-          description="Create your first pot to send money home for a purpose."
+          description="Create your first pot to fund a purpose with USDC."
           action={
             <Button variant="primary" onClick={() => { window.history.pushState(null, '', '#/send'); window.dispatchEvent(new PopStateEvent('popstate')) }}>
-              Send money
+              Create a pot
             </Button>
           }
         />
@@ -99,7 +99,7 @@ export default function MyPotsPage({ onViewPot }: Props) {
                       <PendingBadge potId={ids[i]} />
                     </div>
                     <div className="flex items-center gap-2 text-xs text-[var(--muted)]">
-                      <span>For</span>
+                      <span>Recipient</span>
                       <AddressChip address={pot.beneficiary} />
                     </div>
                     {/* Balance bar */}

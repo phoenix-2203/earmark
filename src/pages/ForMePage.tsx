@@ -60,7 +60,7 @@ export default function ForMePage({ onViewPot }: Props) {
         <EmptyState
           icon={<Inbox className="size-6" />}
           title="No pots for this wallet"
-          description="Share your address with the sender so they can create a pot for you."
+          description="Share your address with the funder so they can create a pot for you."
           action={address ? (
             <div className="flex items-center gap-2">
               <span className="font-mono text-xs text-[var(--ink-2)]">Your address:</span>
@@ -85,7 +85,7 @@ export default function ForMePage({ onViewPot }: Props) {
                       <StatusBadge status={status} />
                     </div>
                     <div className="flex items-center gap-2 text-xs text-[var(--muted)]">
-                      <span>From</span>
+                      <span>Funder</span>
                       <AddressChip address={pot.sender} />
                     </div>
                     <div className="flex items-center gap-2">

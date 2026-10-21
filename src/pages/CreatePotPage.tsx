@@ -142,10 +142,10 @@ export default function CreatePotPage({ onBack, onSuccess }: Props) {
     for (const p of completed) {
       if (!p.checksumAddress) { e.payees = `Invalid address: ${p.rawAddress}`; break }
       if (beneficiary && p.checksumAddress.toLowerCase() === beneficiary.toLowerCase()) {
-        e.payees = 'The family member cannot be an approved payee.'; break
+        e.payees = 'The recipient cannot be an approved payee.'; break
       }
       if (address && p.checksumAddress.toLowerCase() === address.toLowerCase()) {
-        e.payees = 'The sender cannot be an approved payee.'; break
+        e.payees = 'The funder cannot be an approved payee.'; break
       }
       if (!p.label.trim()) { e.payees = 'Every payee needs a label.'; break }
       if (p.label.length > 48) { e.payees = 'Payee labels must be 48 characters or fewer.'; break }
@@ -279,7 +279,7 @@ export default function CreatePotPage({ onBack, onSuccess }: Props) {
           </div>
           <h2 className="text-lg font-semibold text-[var(--ink)]">Pot created!</h2>
           <p className="text-sm text-[var(--muted)]">
-            Share the pot link with your family member so they can see the pot and make payments.
+            Share this link with the recipient so they can view the pot and make payments.
           </p>
           <div className="flex gap-3 justify-center flex-wrap">
             <Button
@@ -338,7 +338,7 @@ export default function CreatePotPage({ onBack, onSuccess }: Props) {
         <h2 className="display mb-6 text-2xl font-semibold text-[var(--ink)]">Review your pot</h2>
 
         <Card padding="lg" className="mb-4 space-y-4">
-          <ReviewRow label="Family member" value={beneficiary ?? ''} mono />
+          <ReviewRow label="Recipient" value={beneficiary ?? ''} mono />
           <ReviewRow label="Purpose" value={title} />
           <ReviewRow label="Category" value={CATEGORY_NAMES[category] ?? 'Other'} />
           <ReviewRow label="Amount" value={`${amount} USDC`} />
@@ -380,14 +380,14 @@ export default function CreatePotPage({ onBack, onSuccess }: Props) {
         <ArrowLeft className="size-4" aria-hidden /> Back
       </button>
 
-      <h1 className="display mb-8 text-2xl font-semibold text-[var(--ink)]">Send money</h1>
+      <h1 className="display mb-8 text-2xl font-semibold text-[var(--ink)]">Create a pot</h1>
 
       <div className="space-y-6">
         {/* Beneficiary */}
         <Card padding="lg">
           <Field
-            label="Who is it for? (family member's wallet)"
-            help="Ask your family member for their wallet address. You cannot send a pot to yourself."
+            label="Who is it for? (recipient's wallet)"
+            help="The person who will spend from this pot. You can't be your own recipient."
             error={errors.beneficiary}
           >
             {(fieldProps) => (
@@ -503,7 +503,7 @@ export default function CreatePotPage({ onBack, onSuccess }: Props) {
             <div>
               <p className="text-xs font-medium text-[var(--ink-2)]">Who can be paid? (approved payees)</p>
               <p className="mt-0.5 text-xs text-[var(--muted)]">
-                Only these addresses can receive money from this pot. Your family member can ask you to add more later.
+                Only these addresses can receive money from this pot. The recipient can ask you to add more later.
               </p>
             </div>
             <button
@@ -565,7 +565,7 @@ export default function CreatePotPage({ onBack, onSuccess }: Props) {
           onClick={handleReview}
           disabled={!isConnected}
         >
-          {!isConnected ? 'Connect wallet to continue' : 'Review and create pot'}
+          {!isConnected ? 'Connect wallet to continue' : 'Review pot'}
         </Button>
       </div>
     </main>

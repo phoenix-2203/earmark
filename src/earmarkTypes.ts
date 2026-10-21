@@ -1,6 +1,6 @@
 /** Shared types that match the Solidity structs */
 
-export const CATEGORY_NAMES = ['School', 'Rent', 'Medical', 'Business', 'Other'] as const
+export const CATEGORY_NAMES = ['Education', 'Housing', 'Health', 'Business', 'Other'] as const
 export type CategoryName = (typeof CATEGORY_NAMES)[number]
 
 export const CATEGORY_ICONS: Record<number, string> = {
@@ -64,17 +64,17 @@ export function friendlyErrorName(name: string): string {
     case 'ZeroAddress':              return 'Address cannot be zero.'
     case 'ZeroAmount':               return 'Amount must be greater than zero.'
     case 'SelfBeneficiary':          return 'You cannot create a pot for yourself.'
-    case 'TooManyPendingRequests':   return 'Too many pending payee requests — wait for the sender to resolve some first.'
+    case 'TooManyPendingRequests':   return 'Too many pending payee requests — wait for the funder to resolve some first.'
     case 'InvalidExpiry':            return 'The end date must be in the future.'
     case 'PotClosed':                return 'This pot is already closed.'
     case 'PotExpired':               return 'This pot has ended — no more payments are possible.'
-    case 'NotSender':                return 'Only the sender can do this.'
-    case 'NotBeneficiary':           return 'Only the family member can do this.'
-    case 'NotParticipant':           return 'Only the sender or family member can do this.'
+    case 'NotSender':                return 'Only the funder can do this.'
+    case 'NotBeneficiary':           return 'Only the recipient can do this.'
+    case 'NotParticipant':           return 'Only the funder or the recipient can do this.'
     case 'AlreadyApprovedPayee':     return 'This payee is already on the approved list.'
-    case 'PayeeNotApproved':         return 'This payee has not been approved by the sender.'
-    case 'SenderCannotBePayee':      return 'The sender cannot be an approved payee of their own pot.'
-    case 'BeneficiaryCannotBePayee': return 'The family member cannot be an approved payee.'
+    case 'PayeeNotApproved':         return 'This payee has not been approved by the funder.'
+    case 'SenderCannotBePayee':      return "The funder can't be a payee of their own pot."
+    case 'BeneficiaryCannotBePayee': return "The recipient can't be a payee of this pot."
     case 'ContractCannotBePayee':    return 'A contract address cannot be a payee.'
     case 'MaxPayeesReached':         return 'A pot can have at most 20 approved payees.'
     case 'TitleTooLong':             return 'Title must be 64 characters or fewer.'

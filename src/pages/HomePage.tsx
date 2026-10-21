@@ -14,22 +14,22 @@ export default function HomePage({ onSend, onMyPots, onForMe, onHow }: Props) {
       {/* ── Hero ── */}
       <div className="mb-12 max-w-lg">
         <h1 className="display mb-3 text-4xl font-semibold text-[var(--ink)] text-balance" style={{ letterSpacing: '-0.025em' }}>
-          Send money home for a reason.
+          Money with a purpose.
         </h1>
         <p className="text-base text-[var(--ink-2)] text-pretty leading-relaxed">
-          Earmark locks USDC to a purpose. Your family can only pay the school, landlord or clinic
-          you approve — and every payment leaves a public receipt.
+          Fund a pot in USDC for one expense. The recipient can only pay the payees you
+          approve — and every payment leaves a public receipt on Arc.
         </p>
 
         <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
           <Button size="lg" onClick={onSend} className="w-full sm:w-auto">
-            <Send className="size-4" aria-hidden />
-            Send money
+            <PotIcon className="size-4" aria-hidden />
+            Create a pot
             <ArrowRight className="size-4" aria-hidden />
           </Button>
           <div className="flex gap-4 text-sm font-medium text-[var(--accent)]">
             <button onClick={onForMe} className="hover:underline focus-visible:outline-2 focus-visible:outline-[var(--focus)] rounded">
-              I received a pot
+              I'm a recipient
             </button>
             <span className="text-[var(--line)]">·</span>
             <button onClick={onHow} className="hover:underline focus-visible:outline-2 focus-visible:outline-[var(--focus)] rounded">
@@ -38,6 +38,29 @@ export default function HomePage({ onSend, onMyPots, onForMe, onHow }: Props) {
           </div>
         </div>
       </div>
+
+      {/* ── Used for ── */}
+      <section className="mb-10" aria-labelledby="used-for-heading">
+        <p id="used-for-heading" className="mb-3 text-xs font-semibold uppercase tracking-widest text-[var(--muted)]">
+          Used for
+        </p>
+        <ul className="grid gap-2 sm:grid-cols-2">
+          {[
+            'Money sent home — school fees, rent, medical bills',
+            'Staff allowances and per diems',
+            'Grants and scholarships',
+            'Supplier and project budgets',
+          ].map((example) => (
+            <li
+              key={example}
+              className="flex items-start gap-2 rounded-card border border-[var(--line)] bg-[var(--surface)] px-4 py-3 text-sm text-[var(--ink-2)] shadow-card"
+            >
+              <span className="mt-0.5 text-[var(--accent)]" aria-hidden>→</span>
+              {example}
+            </li>
+          ))}
+        </ul>
+      </section>
 
       {/* ── 3-step strip ── */}
       <section className="mb-12" aria-labelledby="steps-heading">
@@ -50,19 +73,19 @@ export default function HomePage({ onSend, onMyPots, onForMe, onHow }: Props) {
               n: 1,
               Icon: GraduationCap,
               title: 'Create a pot for one expense',
-              desc: 'Set the purpose, amount, end date, and who can be paid. Fund it with USDC.',
+              desc: 'Set the purpose, amount, end date, and which payees are approved. Fund it with USDC.',
             },
             {
               n: 2,
               Icon: CheckCircle2,
               title: 'Approve who can be paid',
-              desc: 'Only the addresses you choose — the school, landlord, or clinic — can receive money from the pot.',
+              desc: 'Only the addresses you choose — a school, supplier, clinic, or landlord — can receive money from the pot.',
             },
             {
               n: 3,
               Icon: ReceiptText,
-              title: 'Family pays, everyone can verify',
-              desc: 'Your family pays approved payees directly. Every payment is recorded on Arc with a public receipt.',
+              title: 'The recipient pays; anyone can verify',
+              desc: 'The recipient pays approved payees directly. Every payment is recorded on Arc with a public receipt.',
             },
           ].map(({ n, Icon, title, desc }) => (
             <li
@@ -99,15 +122,15 @@ export default function HomePage({ onSend, onMyPots, onForMe, onHow }: Props) {
           <div>
             <p className="mb-2 text-xs font-semibold text-[var(--success)]">Does</p>
             <ul className="space-y-1.5 text-xs text-[var(--ink-2)]">
-              <li className="flex gap-2"><span className="text-[var(--success)]">✓</span> Only lets the pot pay addresses you approved</li>
+              <li className="flex gap-2"><span className="text-[var(--success)]">✓</span> Only lets the pot pay addresses the funder approved</li>
               <li className="flex gap-2"><span className="text-[var(--success)]">✓</span> Records every payment on Arc with a memo</li>
-              <li className="flex gap-2"><span className="text-[var(--success)]">✓</span> Returns unspent money to you after the end date</li>
+              <li className="flex gap-2"><span className="text-[var(--success)]">✓</span> Returns unspent money to the funder after the end date</li>
             </ul>
           </div>
           <div>
             <p className="mb-2 text-xs font-semibold text-danger">Doesn't</p>
             <ul className="space-y-1.5 text-xs text-[var(--ink-2)]">
-              <li className="flex gap-2"><span className="text-danger">✗</span> Verify who owns an address (get the school's wallet from the school)</li>
+              <li className="flex gap-2"><span className="text-danger">✗</span> Verify who owns an address (confirm it directly with the payee)</li>
               <li className="flex gap-2"><span className="text-danger">✗</span> Reverse a payment once confirmed</li>
               <li className="flex gap-2"><span className="text-danger">✗</span> Work with tokens other than USDC</li>
             </ul>
@@ -121,7 +144,7 @@ export default function HomePage({ onSend, onMyPots, onForMe, onHow }: Props) {
           onClick={onMyPots}
           className="flex items-center justify-between rounded-card border border-[var(--line)] bg-[var(--surface)] px-5 py-4 text-sm font-semibold text-[var(--ink)] shadow-card hover:bg-[var(--surface-2)] focus-visible:outline-2 focus-visible:outline-[var(--focus)]"
         >
-          Pots I sent
+          Pots I fund
           <ArrowRight className="size-4 text-[var(--muted)]" aria-hidden />
         </button>
         <button
@@ -136,8 +159,8 @@ export default function HomePage({ onSend, onMyPots, onForMe, onHow }: Props) {
   )
 }
 
-// Inline Send icon (lucide-react)
-function Send({ className }: { className?: string }) {
+// Inline pot/piggy icon
+function PotIcon({ className }: { className?: string }) {
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"
@@ -147,8 +170,7 @@ function Send({ className }: { className?: string }) {
       strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"
       className={className}
     >
-      <path d="m22 2-7 20-4-9-9-4Z"/>
-      <path d="M22 2 11 13"/>
+      <path d="M19 5c-1.5 0-2.8 1.4-3 2-3.5-1.5-11-.3-11 5 0 1.8 0 3 2 4.5V20h4v-2h2v2h4v-4.5c2-1.5 2.5-2.5 2.5-4.5v-1H22V9h-3V7c0-1.1.9-2 2-2V5Z"/>
     </svg>
   )
 }

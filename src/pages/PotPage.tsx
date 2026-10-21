@@ -212,11 +212,11 @@ export default function PotPage({ potId, onBack, onReceipt }: Props) {
       <Card padding="md" className="mb-4 space-y-2">
         <h2 className="text-xs font-semibold uppercase tracking-widest text-[var(--muted)]">People</h2>
         <div className="flex items-center justify-between">
-          <span className="text-xs text-[var(--muted)]">Sender</span>
+          <span className="text-xs text-[var(--muted)]">Funder</span>
           <AddressChip address={pot.sender} />
         </div>
         <div className="flex items-center justify-between">
-          <span className="text-xs text-[var(--muted)]">Family member</span>
+          <span className="text-xs text-[var(--muted)]">Recipient</span>
           <AddressChip address={pot.beneficiary} />
         </div>
         <div className="flex items-center justify-between">
@@ -346,7 +346,7 @@ function SenderPanel({ pot, potId, payees, requests, pendingCount, onRefetchPaye
 
   return (
     <Card padding="md" className="mb-4 space-y-4 border-[var(--accent-soft)] bg-[var(--accent-soft)]">
-      <h2 className="text-xs font-semibold uppercase tracking-widest text-[var(--accent)]">Sender actions</h2>
+      <h2 className="text-xs font-semibold uppercase tracking-widest text-[var(--accent)]">Funder actions</h2>
 
       {pot.closed && (
         <p className="text-xs text-[var(--muted)]">This pot is closed. No more actions available.</p>
@@ -374,7 +374,7 @@ function SenderPanel({ pot, potId, payees, requests, pendingCount, onRefetchPaye
               <CalendarClock className="size-3.5" aria-hidden /> Extend end date
             </Button>
             <Button variant="secondary" size="sm" onClick={() => setReleaseDialog(true)}>
-              <Gift className="size-3.5" aria-hidden /> Give the rest to family
+              <Gift className="size-3.5" aria-hidden /> Release the rest to recipient
             </Button>
             {expired && (
               <Button variant="danger" size="sm" onClick={() => setReclaimDialog(true)}>
@@ -422,10 +422,10 @@ function SenderPanel({ pot, potId, payees, requests, pendingCount, onRefetchPaye
         </>
       )}
 
-      <Dialog open={releaseDialog} onClose={() => setReleaseDialog(false)} title="Give the rest to family">
+      <Dialog open={releaseDialog} onClose={() => setReleaseDialog(false)} title="Release the rest to recipient">
         <div className="space-y-4">
           <p className="text-sm text-[var(--ink-2)]">
-            <strong className="font-mono tabular-nums">{formatUsdc(pot.balance)} USDC</strong> goes to your family member with no restrictions.
+            <strong className="font-mono tabular-nums">{formatUsdc(pot.balance)} USDC</strong> will be released to the recipient with no restrictions.
             The pot closes. <strong>This can't be undone.</strong>
           </p>
           <ReleaseAction potId={potId} onDone={() => { setReleaseDialog(false); onRefetchPot() }} />
@@ -480,7 +480,7 @@ function BeneficiaryPanel({ pot, potId, payees, requests, onRefetchPayments, onR
             <p className="text-xs text-[var(--muted)]">The pot balance is 0 — nothing to pay.</p>
           )}
           {!canPay && !expired && pot.balance > 0n && payees.length === 0 && (
-            <p className="text-xs text-[var(--muted)]">No approved payees yet. Ask the sender to add one.</p>
+            <p className="text-xs text-[var(--muted)]">No approved payees yet. Ask the funder to add one.</p>
           )}
         </div>
       )}
@@ -628,8 +628,8 @@ function AddPayeeForm({ potId, pot, payees, onDone }: { potId: bigint; pot: Pot;
     if (!checksumAddr) { setValErr('Enter a valid address.'); return }
     if (!label.trim()) { setValErr('Enter a label.'); return }
     if (label.length > 48) { setValErr('Label must be 48 characters or fewer.'); return }
-    if (checksumAddr.toLowerCase() === pot.sender.toLowerCase()) { setValErr('The sender cannot be a payee.'); return }
-    if (checksumAddr.toLowerCase() === pot.beneficiary.toLowerCase()) { setValErr('The family member cannot be a payee.'); return }
+    if (checksumAddr.toLowerCase() === pot.sender.toLowerCase()) { setValErr('The funder cannot be a payee.'); return }
+    if (checksumAddr.toLowerCase() === pot.beneficiary.toLowerCase()) { setValErr('The recipient cannot be a payee.'); return }
     if (payees.some((p) => p.address.toLowerCase() === checksumAddr.toLowerCase())) { setValErr('This address is already an approved payee.'); return }
     setValErr(undefined)
     await action.execute({
@@ -705,7 +705,7 @@ function RemovePayeeRow({ potId, payee, onRemoved }: { potId: bigint; payee: Pay
       <Dialog open={confirmOpen} onClose={() => { setConfirmOpen(false); action.reset() }} title="Remove payee">
         <div className="space-y-4">
           <p className="text-sm text-[var(--ink-2)]">
-            Remove <strong>{payee.label}</strong>? Your family won't be able to pay this address from this pot.
+            Remove <strong>{payee.label}</strong>? The recipient won't be able to pay this address from this pot.
           </p>
           <p className="font-mono text-xs text-[var(--muted)] break-all">{payee.address}</p>
           {action.errorMessage && (
@@ -877,7 +877,7 @@ function ExtendForm({ potId, currentExpiry, onDone }: { potId: bigint; currentEx
 function ReleaseAction({ potId, onDone }: { potId: bigint; onDone: () => void }) {
   const action = useContractAction()
   useEffect(() => {
-    if (action.state === 'confirmed') { toast.success('Released to family!'); onDone() }
+    if (action.state === 'confirmed') { toast.success('Released to recipient!'); onDone() }
   }, [action.state, onDone])
   return (
     <div className="space-y-3">
@@ -893,7 +893,7 @@ function ReleaseAction({ potId, onDone }: { potId: bigint; onDone: () => void })
           onSuccess: onDone,
         })}
       >
-        <Gift className="size-4" aria-hidden /> Give the rest to family
+        <Gift className="size-4" aria-hidden /> Release the rest to recipient
       </Button>
     </div>
   )
@@ -1074,10 +1074,10 @@ function RequestPayeeForm({ potId, pot, payees, onDone }: { potId: bigint; pot: 
     if (label.length > 48) { setValErr('Label must be 48 characters or fewer.'); return }
     if (reason.length > 140) { setValErr('Reason must be 140 characters or fewer.'); return }
     if (checksumAddr.toLowerCase() === pot.sender.toLowerCase()) {
-      setValErr("That's the sender. Earmark only pays outside payees — that's what keeps the money tied to its purpose."); return
+      setValErr("That's the funder or the recipient. Earmark only pays outside payees — that's what keeps the money tied to its purpose."); return
     }
     if (checksumAddr.toLowerCase() === pot.beneficiary.toLowerCase()) {
-      setValErr("That's the family member. Earmark only pays outside payees — that's what keeps the money tied to its purpose."); return
+      setValErr("That's the funder or the recipient. Earmark only pays outside payees — that's what keeps the money tied to its purpose."); return
     }
     if (payees.some((p) => p.address.toLowerCase() === checksumAddr.toLowerCase())) {
       setValErr('This payee is already approved.'); return
