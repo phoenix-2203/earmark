@@ -1,10 +1,16 @@
 /**
  * Section 6 — Live on Arc.
- * Real data: potCount + 5 most recent Paid events. No wallet required.
- * Chunked getLogs scan newest-first, stops after 5 results.
+ * Real data: potCount() from contract + 5 most recent Paid events. No wallet.
+ *
+ * Key fixes vs previous version:
+ * - Uses Paid/PotCreated event definitions extracted from EARMARK_ABI (not hand-written)
+ * - potCount read from potCount() view function, not counted from logs
+ * - timestamp read from getPayments(potId)[paymentIndex].timestamp (Paid event has no timestamp)
+ * - payee label read from getPayees(potId) when available
+ * - Every stat shows "—" while loading or on RPC error
  */
 import { useState, useEffect, useCallback } from 'react'
-import { createPublicClient, http, decodeEventLog, parseAbiItem } from 'viem'
+import { createPublicClient, http, decodeEventLog } from 'viem'
 import { arcTestnet } from 'viem/chains'
 import { RefreshCw, ExternalLink } from 'lucide-react'
 import { EARMARK_ADDRESS, EARMARK_ABI, EARMARK_FROM_BLOCK, EARMARK_CHAIN } from '@/earmarkConfig'
@@ -13,30 +19,31 @@ import { formatUsdc } from '@/onchain-money'
 const CHUNK = 9000n
 const MAX_PAYMENTS = 5
 
+// Extract the Paid and PotCreated event ABI entries from EARMARK_ABI so we never
+// hand-write a signature that can drift out of sync with the contract.
+const PAID_ABI_EVENT = EARMARK_ABI.find(
+  (e): e is typeof e & { type: 'event'; name: 'Paid' } =>
+    e.type === 'event' && e.name === 'Paid'
+)!
+
 interface RecentPayment {
   potId: bigint
-  payee: `0x${string}`
-  amount: bigint
-  timestamp: bigint
-  txHash: `0x${string}`
-  blockNumber: bigint
   paymentIndex: number
+  payee: `0x${string}`
+  payeeLabel: string | null
+  amount: bigint
+  timestamp: bigint | null   // from getPayments; null if RPC call failed
+  txHash: `0x${string}`
 }
-
-const PAID_EVENT = parseAbiItem(
-  'event Paid(uint256 indexed potId, address indexed payer, address indexed payee, uint256 amount, string memo, uint256 timestamp, uint256 paymentIndex)'
-)
-const POT_CREATED_EVENT = parseAbiItem(
-  'event PotCreated(uint256 indexed potId, address indexed sender, address indexed beneficiary, string title, uint8 category, uint256 amount, uint256 expiry)'
-)
 
 function makeClient() {
   const proxyChains = String(import.meta.env.VITE_RPC_PROXY_CHAINS ?? '').split(',')
   const proxyBase = import.meta.env.VITE_RPC_PROXY_BASE_URL as string | undefined
   const proxyToken = import.meta.env.VITE_RPC_PROXY_TOKEN as string | undefined
-  const rpcUrl = proxyBase && proxyChains.includes('Arc_Testnet')
-    ? `${proxyBase}/api/rpc/Arc_Testnet?_rpc_token=${proxyToken ?? ''}`
-    : (EARMARK_CHAIN.rpcUrls[0] ?? 'https://rpc.arc.io')
+  const rpcUrl =
+    proxyBase && proxyChains.includes('Arc_Testnet')
+      ? `${proxyBase}/api/rpc/Arc_Testnet?_rpc_token=${proxyToken ?? ''}`
+      : (EARMARK_CHAIN.rpcUrls[0] ?? 'https://rpc.arc.io')
   return createPublicClient({ chain: arcTestnet, transport: http(rpcUrl) })
 }
 
@@ -51,56 +58,116 @@ export default function LandingLiveOnArc() {
     setError(null)
     try {
       const client = makeClient()
+
+      // 1. Read potCount() from the contract — authoritative, never under-counts
+      const rawCount = await client.readContract({
+        address: EARMARK_ADDRESS,
+        abi: EARMARK_ABI,
+        functionName: 'potCount',
+      })
+      setPotCount(rawCount)
+
+      // 2. Scan for Paid events newest-first, stop after MAX_PAYMENTS
       const head = await client.getBlockNumber()
-
-      const results: RecentPayment[] = []
-      let potCountSeen = 0n
-      let from = head
       const startBlock = EARMARK_FROM_BLOCK > 0n ? EARMARK_FROM_BLOCK : 0n
+      const rawResults: Array<{
+        potId: bigint
+        paymentIndex: bigint
+        payee: `0x${string}`
+        amount: bigint
+        txHash: `0x${string}`
+      }> = []
 
-      while (from > startBlock && results.length < MAX_PAYMENTS) {
+      let from = head
+      while (from > startBlock && rawResults.length < MAX_PAYMENTS) {
         const to = from
         const chunkFrom = from > CHUNK ? from - CHUNK : startBlock
-        const [paidLogs, createdLogs] = await Promise.all([
-          client.getLogs({
-            address: EARMARK_ADDRESS,
-            event: PAID_EVENT,
-            fromBlock: chunkFrom,
-            toBlock: to,
-          }),
-          client.getLogs({
-            address: EARMARK_ADDRESS,
-            event: POT_CREATED_EVENT,
-            fromBlock: chunkFrom,
-            toBlock: to,
-          }),
-        ])
-        potCountSeen += BigInt(createdLogs.length)
-        const sorted = [...paidLogs].sort((a, b) => Number((b.blockNumber ?? 0n) - (a.blockNumber ?? 0n)))
+        const paidLogs = await client.getLogs({
+          address: EARMARK_ADDRESS,
+          // Pass the event ABI entry directly — viem uses it to build the topic filter
+          event: PAID_ABI_EVENT,
+          fromBlock: chunkFrom,
+          toBlock: to,
+        })
+        const sorted = [...paidLogs].sort(
+          (a, b) => Number((b.blockNumber ?? 0n) - (a.blockNumber ?? 0n))
+        )
         for (const log of sorted) {
-          if (results.length >= MAX_PAYMENTS) break
+          if (rawResults.length >= MAX_PAYMENTS) break
           try {
-            const decoded = decodeEventLog({ abi: EARMARK_ABI, data: log.data, topics: log.topics })
+            const decoded = decodeEventLog({
+              abi: EARMARK_ABI,
+              data: log.data,
+              topics: log.topics,
+            })
             if (decoded.eventName === 'Paid') {
-              const args = decoded.args as unknown as { potId: bigint; payee: `0x${string}`; amount: bigint; memo: string; timestamp: bigint; paymentIndex: bigint }
-              results.push({
+              const args = decoded.args as unknown as {
+                potId: bigint
+                paymentIndex: bigint
+                payee: `0x${string}`
+                amount: bigint
+              }
+              rawResults.push({
                 potId: args.potId,
+                paymentIndex: args.paymentIndex,
                 payee: args.payee,
                 amount: args.amount,
-                timestamp: args.timestamp,
-                txHash: (log.transactionHash ?? '0x'),
-                blockNumber: log.blockNumber ?? 0n,
-                paymentIndex: Number(args.paymentIndex),
+                txHash: log.transactionHash ?? ('0x'),
               })
             }
-          } catch { /* skip undecoded */ }
+          } catch { /* skip log if decode fails */ }
         }
         if (from <= CHUNK) break
         from = chunkFrom - 1n
       }
 
-      setPotCount(potCountSeen)
-      setPayments(results)
+      // 3. For each result, enrich with timestamp (from getPayments) and payee label (from getPayees)
+      //    Use Promise.allSettled so a per-pot RPC failure doesn't drop the whole list.
+      const enriched = await Promise.allSettled(
+        rawResults.map(async (r) => {
+          let timestamp: bigint | null = null
+          let payeeLabel: string | null = null
+          try {
+            const [payments, payees] = await Promise.all([
+              client.readContract({
+                address: EARMARK_ADDRESS,
+                abi: EARMARK_ABI,
+                functionName: 'getPayments',
+                args: [r.potId],
+              }) as Promise<Array<{ payee: `0x${string}`; amount: bigint; memo: string; timestamp: bigint; payer: `0x${string}` }>>,
+              client.readContract({
+                address: EARMARK_ADDRESS,
+                abi: EARMARK_ABI,
+                functionName: 'getPayees',
+                args: [r.potId],
+              }) as Promise<[`0x${string}`[], string[]]>,
+            ])
+            const paymentRecord = payments[Number(r.paymentIndex)]
+            if (paymentRecord) timestamp = paymentRecord.timestamp
+            const payeeIdx = payees[0].findIndex(
+              (a) => a.toLowerCase() === r.payee.toLowerCase()
+            )
+            if (payeeIdx !== -1 && payees[1][payeeIdx]) {
+              payeeLabel = payees[1][payeeIdx]
+            }
+          } catch { /* leave timestamp/label null */ }
+          return {
+            potId: r.potId,
+            paymentIndex: Number(r.paymentIndex),
+            payee: r.payee,
+            payeeLabel,
+            amount: r.amount,
+            timestamp,
+            txHash: r.txHash,
+          } satisfies RecentPayment
+        })
+      )
+
+      setPayments(
+        enriched
+          .filter((r): r is PromiseFulfilledResult<RecentPayment> => r.status === 'fulfilled')
+          .map((r) => r.value)
+      )
     } catch {
       setError("Couldn't reach Arc right now.")
     } finally {
@@ -109,7 +176,6 @@ export default function LandingLiveOnArc() {
   }, [])
 
   useEffect(() => {
-    // Defer so setLoading(true) doesn't fire synchronously inside the effect
     const id = setTimeout(() => { void load() }, 0)
     return () => clearTimeout(id)
   }, [load])
@@ -132,9 +198,12 @@ export default function LandingLiveOnArc() {
           Every number below is read from Arc Testnet — no database, no backend.
         </p>
 
-        {/* Stats bar */}
+        {/* Stats bar — show "—" until data loads or on error */}
         <div className="mb-6 flex flex-wrap justify-center gap-6">
-          <StatChip label="Pots created" value={loading || error ? '—' : (potCount ?? 0n).toString()} />
+          <StatChip
+            label="Pots created"
+            value={loading || error ? '—' : (potCount ?? 0n).toString()}
+          />
           <StatChip label="Network" value={EARMARK_CHAIN.name} />
           <StatChip
             label="Contract"
@@ -143,7 +212,7 @@ export default function LandingLiveOnArc() {
           />
         </div>
 
-        {/* Recent payments */}
+        {/* Recent payments table */}
         <div className="rounded-card border border-[var(--line)] bg-[var(--surface)] shadow-card overflow-hidden">
           <div className="flex items-center justify-between border-b border-[var(--line)] px-5 py-3.5">
             <p className="text-sm font-semibold text-[var(--ink)]">Recent payments</p>
@@ -169,7 +238,7 @@ export default function LandingLiveOnArc() {
             </div>
           )}
 
-          {error && (
+          {!loading && error && (
             <div className="px-5 py-8 text-center">
               <p className="text-sm text-[var(--ink-2)]">{error}</p>
               <button
@@ -203,10 +272,18 @@ export default function LandingLiveOnArc() {
 function StatChip({ label, value, href }: { label: string; value: string; href?: string }) {
   return (
     <div className="flex flex-col items-center gap-0.5 rounded-card border border-[var(--line)] bg-[var(--surface)] px-5 py-3 shadow-card text-center min-w-[120px]">
-      <span className="text-[10px] font-semibold uppercase tracking-widest text-[var(--muted)]">{label}</span>
+      <span className="text-[10px] font-semibold uppercase tracking-widest text-[var(--muted)]">
+        {label}
+      </span>
       {href ? (
-        <a href={href} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-sm font-semibold text-[var(--accent)] hover:underline font-mono focus-visible:outline-2 focus-visible:outline-[var(--focus)] rounded">
-          {value}<ExternalLink className="size-3" aria-hidden />
+        <a
+          href={href}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center gap-1 text-sm font-semibold text-[var(--accent)] hover:underline font-mono focus-visible:outline-2 focus-visible:outline-[var(--focus)] rounded"
+        >
+          {value}
+          <ExternalLink className="size-3" aria-hidden />
         </a>
       ) : (
         <span className="text-sm font-semibold text-[var(--ink)] font-mono">{value}</span>
@@ -216,18 +293,30 @@ function StatChip({ label, value, href }: { label: string; value: string; href?:
 }
 
 function PaymentRow({ payment }: { payment: RecentPayment }) {
-  const date = new Date(Number(payment.timestamp) * 1000)
-  const dateStr = date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
-  const receiptHash = `#/receipt/${payment.potId}/${payment.paymentIndex}`
+  const dateStr = payment.timestamp
+    ? new Date(Number(payment.timestamp) * 1000).toLocaleDateString(undefined, {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+      })
+    : null
+
+  const receiptHash = `#/receipt/${payment.potId.toString()}/${payment.paymentIndex}`
   const txUrl = `${EARMARK_CHAIN.explorerBase}/tx/${payment.txHash}`
+
+  // Show label if available, else shortened address
+  const payeeDisplay = payment.payeeLabel
+    ? payment.payeeLabel
+    : `${payment.payee.slice(0, 8)}…${payment.payee.slice(-6)}`
 
   return (
     <div className="flex flex-wrap items-center justify-between gap-2 px-5 py-3.5">
       <div className="flex flex-col gap-0.5">
-        <span className="font-mono text-xs text-[var(--ink-2)]">
-          {payment.payee.slice(0, 8)}…{payment.payee.slice(-6)}
+        <span className="text-xs font-medium text-[var(--ink-2)]">{payeeDisplay}</span>
+        <span className="text-[10px] text-[var(--muted)]">
+          Pot #{payment.potId.toString()}
+          {dateStr ? ` · ${dateStr}` : ''}
         </span>
-        <span className="text-[10px] text-[var(--muted)]">Pot #{payment.potId.toString()} · {dateStr}</span>
       </div>
       <div className="flex items-center gap-3">
         <span className="text-sm font-semibold text-[var(--ink)]">
