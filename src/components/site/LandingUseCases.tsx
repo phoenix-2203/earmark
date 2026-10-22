@@ -22,7 +22,7 @@ interface UseCase {
   payees:    [SceneParty, SceneParty]
   blocked:   string
   potTitle:  string
-  amount:    string
+  amountNum: number
   sentence:  string
 }
 
@@ -37,7 +37,7 @@ const CASES: UseCase[] = [
     ],
     blocked:  "Your family's wallet",
     potTitle: 'School fees · Term 1',
-    amount:   '500 USDC',
+    amountNum: 500,
     sentence: 'Help with school fees and rent without worrying where it goes.',
   },
   {
@@ -50,7 +50,7 @@ const CASES: UseCase[] = [
     ],
     blocked:  "Bill payer's wallet",
     potTitle: 'Household bills · Oct',
-    amount:   '200 USDC',
+    amountNum: 200,
     sentence: "Bills get paid; the money can't be spent on anything else.",
   },
   {
@@ -63,7 +63,7 @@ const CASES: UseCase[] = [
     ],
     blocked:  "Freelancer's wallet",
     potTitle: 'Project budget',
-    amount:   '1 200 USDC',
+    amountNum: 1200,
     sentence: 'Give a job budget the freelancer can only spend on the job.',
   },
   {
@@ -76,7 +76,7 @@ const CASES: UseCase[] = [
     ],
     blocked:  "Staff member's wallet",
     potTitle: 'Travel allowance · Q4',
-    amount:   '800 USDC',
+    amountNum: 800,
     sentence: 'Travel budgets that can only pay for travel.',
   },
   {
@@ -89,7 +89,7 @@ const CASES: UseCase[] = [
     ],
     blocked:  "Student's wallet",
     potTitle: 'Research grant 2026',
-    amount:   '5 000 USDC',
+    amountNum: 5000,
     sentence: 'Funding that reaches the institution, with receipts for every payment.',
   },
   {
@@ -102,7 +102,7 @@ const CASES: UseCase[] = [
     ],
     blocked:  "Family's wallet",
     potTitle: 'Essential support',
-    amount:   '300 USDC',
+    amountNum: 300,
     sentence: 'Support that can only be used for essentials.',
   },
   {
@@ -115,7 +115,7 @@ const CASES: UseCase[] = [
     ],
     blocked:  "Planner's wallet",
     potTitle: 'Wedding / event budget',
-    amount:   '3 000 USDC',
+    amountNum: 3000,
     sentence: 'The planner pays vendors; the budget can\'t leak.',
   },
 ]
@@ -230,7 +230,7 @@ export default function LandingUseCases() {
             ))}
           </div>
 
-          {/* FlowScene */}
+          {/* FlowScene — full width */}
           <FlowScene
             key={active}
             funder={uc.funder}
@@ -238,7 +238,8 @@ export default function LandingUseCases() {
             payees={uc.payees}
             blocked={uc.blocked}
             potTitle={uc.potTitle}
-            amount={uc.amount}
+            amountNum={uc.amountNum}
+            currency="USDC"
           />
 
           <p className="text-sm text-[var(--ink-2)]">{uc.sentence}</p>

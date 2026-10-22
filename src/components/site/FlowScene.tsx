@@ -1,18 +1,21 @@
 /**
- * FlowScene — animated inline SVG that illustrates the Earmark flow:
- * Funder locks USDC → Pot → approved payees (with receipts).
- * A third payment to the blocked card is rejected at a red barrier.
- * After the end date, the remaining balance flows back to the funder.
+ * FlowScene — animated inline SVG illustrating the Earmark flow.
  *
- * Driven entirely by CSS keyframe animation via a phase index (0-4).
- * Respects prefers-reduced-motion: shows a static final frame.
- * Pauses when off-screen (IntersectionObserver) and tab hidden.
+ * Architecture:
+ * - Single rAF loop, single timeline value t (0–LOOP_MS ms), deterministic.
+ * - ResizeObserver on wrapper selects landscape (≥640px) or portrait (<640px) layout.
+ * - userPaused flag separate from inView/tabVisible: IntersectionObserver resumes on entry.
+ * - No animateMotion (unreliable); coin position interpolated via lerp on bezier t.
+ * - No text truncation: word-wrap by approximate char width, two lines max.
+ * - prefers-reduced-motion: static final frame, all captions visible.
  */
-import { useEffect, useRef, useCallback, useState } from 'react'
+import {
+  useEffect, useLayoutEffect, useRef, useCallback, useState, useMemo,
+} from 'react'
 import type { LucideIcon } from 'lucide-react'
-import { Play, Pause, RotateCcw } from 'lucide-react'
+import { Play, Pause, RotateCcw, Lock } from 'lucide-react'
 
-// ─── Types ───────────────────────────────────────────────────────────────────
+// ─── Public API ───────────────────────────────────────────────────────────────
 
 export interface SceneParty {
   label: string
@@ -20,356 +23,704 @@ export interface SceneParty {
 }
 
 export interface FlowSceneProps {
-  funder:    SceneParty
-  recipient: SceneParty
-  payees:    [SceneParty, SceneParty]   // exactly 2 approved payees
-  blocked:   string                    // label for the blocked target
-  potTitle:  string
-  amount:    string                    // e.g. "500 USDC"
+  funder:     SceneParty
+  recipient:  SceneParty
+  payees:     [SceneParty, SceneParty]
+  blocked:    string
+  potTitle:   string
+  /** Numeric total, e.g. 500 */
+  amountNum:  number
+  /** Display label for currency, e.g. "USDC" */
+  currency?:  string
   className?: string
 }
 
-// ─── Phase durations (ms) ────────────────────────────────────────────────────
-const PHASES = [
-  { id: 0, label: '1 · Fund the pot',              ms: 2200 },
-  { id: 1, label: '2 · Pay approved payees',       ms: 2600 },
-  { id: 2, label: '2 · Pay approved payees',       ms: 2600 },
-  { id: 3, label: '3 · Blocked if not approved',   ms: 2200 },
-  { id: 4, label: '4 · Leftovers come back',        ms: 2200 },
-]
-const _TOTAL_MS = PHASES.reduce((s, p) => s + p.ms, 0) + 800  // +pause at end; kept for reference
+// ─── Timeline ─────────────────────────────────────────────────────────────────
 
-// ─── Layout constants ────────────────────────────────────────────────────────
-const VW = 720
-const VH = 320
+// Step boundaries in ms (must sum to LOOP_MS)
+const S0 = 0        // Fund the pot starts
+const S1 = 2500     // Pay payee 1 starts
+const S2 = 4000     // Pay payee 2 starts
+const S3 = 5500     // Blocked attempt starts
+const S4 = 7500     // Leftovers return starts
+const LOOP_MS = 10000
 
-// Node positions (cx, cy) and sizes
-const FUNDER_X  = 80,   FUNDER_Y   = 160
-const POT_X     = 310,  POT_Y      = 160
-const PAY1_X    = 560,  PAY1_Y     = 90
-const PAY2_X    = 560,  PAY2_Y     = 220
-const BLOCK_X   = 560,  BLOCK_Y    = 160   // blocked target (same column, centre)
-const RECIP_X   = 310,  RECIP_Y    = 270   // below pot
+// Payee amounts: 80% to p1, 12% to p2, 8% left over
+function payee1Amt(total: number) { return Math.round(total * 0.80) }
+function payee2Amt(total: number) { return Math.round(total * 0.12) }
+function leftover(total: number)  { return total - payee1Amt(total) - payee2Amt(total) }
 
-const NODE_W = 120, NODE_H = 52, NODE_R = 10
+function easeInOut(t: number) {
+  return t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t
+}
 
-// Path definitions (Funder→Pot, Pot→Pay1, Pot→Pay2, Pot→Block, Pot→Funder)
-function cx(x: number) { return x + NODE_W / 2 }
-function cy(y: number) { return y + NODE_H / 2 }
+/** Interpolate a cubic bezier at parameter p (0–1) from 4 control points */
+function cubicBezierPoint(
+  p0x: number, p0y: number,
+  p1x: number, p1y: number,
+  p2x: number, p2y: number,
+  p3x: number, p3y: number,
+  t: number,
+): [number, number] {
+  const u = 1 - t
+  const x = u*u*u*p0x + 3*u*u*t*p1x + 3*u*t*t*p2x + t*t*t*p3x
+  const y = u*u*u*p0y + 3*u*u*t*p1y + 3*u*t*t*p2y + t*t*t*p3y
+  return [x, y]
+}
 
-const PATH_FP  = `M ${cx(FUNDER_X)} ${cy(FUNDER_Y)} C ${(cx(FUNDER_X)+cx(POT_X))/2} ${cy(FUNDER_Y)}, ${(cx(FUNDER_X)+cx(POT_X))/2} ${cy(POT_Y)}, ${cx(POT_X)} ${cy(POT_Y)}`
-const PATH_P1  = `M ${cx(POT_X)} ${cy(POT_Y)} C ${(cx(POT_X)+cx(PAY1_X))/2} ${cy(POT_Y)}, ${(cx(POT_X)+cx(PAY1_X))/2} ${cy(PAY1_Y)}, ${cx(PAY1_X)} ${cy(PAY1_Y)}`
-const PATH_P2  = `M ${cx(POT_X)} ${cy(POT_Y)} C ${(cx(POT_X)+cx(PAY2_X))/2} ${cy(POT_Y)}, ${(cx(POT_X)+cx(PAY2_X))/2} ${cy(PAY2_Y)}, ${cx(PAY2_X)} ${cy(PAY2_Y)}`
-const PATH_BLK = `M ${cx(POT_X)} ${cy(POT_Y)} C ${(cx(POT_X)+cx(BLOCK_X))/2} ${cy(POT_Y)}, ${(cx(POT_X)+cx(BLOCK_X))/2} ${cy(BLOCK_Y)}, ${cx(BLOCK_X)-2} ${cy(BLOCK_Y)}`
-const PATH_BACK= `M ${cx(POT_X)} ${cy(POT_Y)} C ${(cx(POT_X)+cx(FUNDER_X))/2} ${cy(POT_Y)-40}, ${(cx(POT_X)+cx(FUNDER_X))/2} ${cy(FUNDER_Y)-40}, ${cx(FUNDER_X)+NODE_W/2} ${cy(FUNDER_Y)-14}`
+/** Fraction of a step: 0→1 clamped, given ms since step start and step duration */
+function stepFrac(t: number, start: number, dur: number): number {
+  return Math.max(0, Math.min(1, (t - start) / dur))
+}
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
+// ─── Word wrap ────────────────────────────────────────────────────────────────
 
-function Node({
-  x, y, label, Icon, active = false, success = false, blocked = false,
+/** Split text into lines that fit maxWidth, using approx charWidth px per char at fontSize. */
+function wordWrap(text: string, maxWidth: number, fontSize: number): string[] {
+  const charW = fontSize * 0.52   // approx for IBM Plex Sans
+  const words = text.split(' ')
+  const lines: string[] = []
+  let cur = ''
+  for (const w of words) {
+    const candidate = cur ? cur + ' ' + w : w
+    if (candidate.length * charW > maxWidth && cur) {
+      lines.push(cur)
+      cur = w
+    } else {
+      cur = candidate
+    }
+  }
+  if (cur) lines.push(cur)
+  return lines.slice(0, 2)  // max 2 lines
+}
+
+// ─── SVG helpers ──────────────────────────────────────────────────────────────
+
+function SvgText({
+  x, y, fontSize, fill, fontWeight, fontFamily, textAnchor, children,
 }: {
-  x: number; y: number; label: string; Icon: LucideIcon
-  active?: boolean; success?: boolean; blocked?: boolean
+  x: number; y: number; fontSize: number; fill: string
+  fontWeight?: string | number; fontFamily?: string; textAnchor?: 'start' | 'middle' | 'end' | 'inherit'
+  children: React.ReactNode
 }) {
-  const stroke = blocked ? 'var(--danger, #B42318)' : success ? '#0F6B5C' : active ? '#0F6B5C' : '#DCE1E6'
-  const bg = blocked ? '#FDECEC' : success ? '#E3F1EE' : active ? '#E3F1EE' : 'white'
-  const ink = blocked ? '#B42318' : '#0F2233'
   return (
-    <g>
+    <text
+      x={x} y={y}
+      fontSize={fontSize}
+      fill={fill}
+      fontWeight={fontWeight ?? 400}
+      fontFamily={fontFamily ?? "'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif"}
+      textAnchor={textAnchor ?? 'start'}
+      dominantBaseline="auto"
+    >
+      {children}
+    </text>
+  )
+}
+
+function SvgIcon({ Icon, x, y, size, color }: { Icon: LucideIcon; x: number; y: number; size: number; color: string }) {
+  // Render lucide icon paths inline via foreignObject (works in all modern browsers).
+  // Cast to any to pass React element as foreignObject child (SVGForeignObjectElement child type is overly strict).
+  const iconEl = <Icon width={size} height={size} color={color} aria-hidden style={{ display: 'block' }} />
+  return (
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    <foreignObject x={x - size / 2} y={y - size / 2} width={size} height={size} style={{ overflow: 'visible' }}>
+      {iconEl /* foreignObject accepts React elements at runtime */}
+    </foreignObject>
+  )
+}
+
+// ─── Card component ───────────────────────────────────────────────────────────
+
+interface CardProps {
+  x: number; y: number; w: number; h: number
+  active?: boolean; success?: boolean; blocked?: boolean; accent?: boolean
+  label: string        // top caption (e.g. "FUNDER")
+  title: string        // main label
+  subtext?: string     // second line
+  Icon: LucideIcon
+  fontSize?: number
+}
+
+function Card({ x, y, w, h, active, success, blocked, accent, label, title, subtext, Icon, fontSize = 15 }: CardProps) {
+  const stroke  = blocked ? '#B42318' : success ? '#0F6B5C' : accent ? '#0F6B5C' : active ? '#0F6B5C' : '#DCE1E6'
+  const bg      = blocked ? '#FDECEC' : accent || success ? '#E3F1EE' : 'white'
+  const inkMain = blocked ? '#B42318' : '#0F2233'
+  const inkSub  = blocked ? '#B42318' : '#5B6775'
+  const iconColor = blocked ? '#B42318' : success || active || accent ? '#0F6B5C' : '#5B6775'
+  const strokeW = blocked || success || accent ? 2 : 1.5
+  const shadow  = active || success || accent
+    ? 'drop-shadow(0 2px 8px rgba(15,107,92,.20))'
+    : 'drop-shadow(0 1px 3px rgba(0,0,0,.06))'
+
+  const titleLines = wordWrap(title, w - 44, fontSize)
+  const lineH = fontSize * 1.28
+
+  return (
+    <g style={{ transition: 'all 0.3s cubic-bezier(.4,0,.2,1)' }}>
       <rect
-        x={x} y={y} width={NODE_W} height={NODE_H} rx={NODE_R}
-        fill={bg} stroke={stroke} strokeWidth={blocked || success ? 2 : 1.5}
-        style={{ filter: active || success ? 'drop-shadow(0 2px 6px rgba(15,107,92,.18))' : 'none',
-                 transition: 'all 0.3s cubic-bezier(.4,0,.2,1)' }}
+        x={x} y={y} width={w} height={h} rx={10}
+        fill={bg} stroke={stroke} strokeWidth={strokeW}
+        strokeDasharray={blocked ? '7 5' : undefined}
+        style={{ filter: shadow }}
       />
-      <Icon
-        x={x + 10} y={y + NODE_H/2 - 8}
-        width={16} height={16}
-        color={blocked ? '#B42318' : active || success ? '#0F6B5C' : '#5B6775'}
-        style={{ transition: 'color 0.3s' }}
-      />
+      {/* Top caption */}
+      <SvgText x={x + 12} y={y + 16} fontSize={10} fill={inkSub} fontWeight={600}
+        fontFamily="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif">
+        {label}
+      </SvgText>
+      {/* Icon */}
+      <SvgIcon Icon={Icon} x={x + 20} y={y + 36} size={18} color={iconColor} />
+      {/* Title (wrapped) */}
+      {titleLines.map((line, i) => (
+        <SvgText
+          key={i}
+          x={x + 44} y={y + 30 + i * lineH}
+          fontSize={fontSize} fill={inkMain} fontWeight={600}
+        >
+          {line}
+        </SvgText>
+      ))}
+      {/* Subtext */}
+      {subtext && (
+        <SvgText x={x + 44} y={y + 30 + titleLines.length * lineH} fontSize={12} fill={inkSub}>
+          {subtext}
+        </SvgText>
+      )}
+    </g>
+  )
+}
+
+// ─── Path helpers ─────────────────────────────────────────────────────────────
+
+interface BezierPath {
+  p0x: number; p0y: number
+  p1x: number; p1y: number
+  p2x: number; p2y: number
+  p3x: number; p3y: number
+}
+
+function bezierD({ p0x, p0y, p1x, p1y, p2x, p2y, p3x, p3y }: BezierPath) {
+  return `M ${p0x} ${p0y} C ${p1x} ${p1y}, ${p2x} ${p2y}, ${p3x} ${p3y}`
+}
+
+// ─── Coin ─────────────────────────────────────────────────────────────────────
+
+function Coin({ cx, cy, visible, shake = false }: { cx: number; cy: number; visible: boolean; shake?: boolean }) {
+  if (!visible) return null
+  return (
+    <g
+      transform={`translate(${cx},${cy})`}
+      style={{
+        animation: shake ? 'coinShake 0.18s ease-in-out 3' : 'none',
+        filter: 'drop-shadow(0 1px 5px rgba(15,107,92,.35))',
+      }}
+    >
+      <circle r={13} fill="#0F6B5C" />
       <text
-        x={x + 32} y={y + NODE_H/2 + 5}
-        fontSize={12} fontFamily="'IBM Plex Sans',sans-serif"
-        fill={ink} fontWeight={active || success ? '600' : '400'}
-        style={{ transition: 'all 0.3s' }}
+        textAnchor="middle" dominantBaseline="central"
+        fontSize={10} fill="white" fontWeight="700"
+        fontFamily="'IBM Plex Mono',ui-monospace,Menlo,monospace"
+      >$</text>
+    </g>
+  )
+}
+
+// ─── Receipt chip ─────────────────────────────────────────────────────────────
+
+function ReceiptChip({ x, y, visible, text }: { x: number; y: number; visible: boolean; text: string }) {
+  if (!visible) return null
+  return (
+    <g style={{ animation: 'chipSlide 0.35s cubic-bezier(.4,0,.2,1) both' }}>
+      <rect x={x} y={y} width={110} height={24} rx={6} fill="#0F6B5C" />
+      <text
+        x={x + 8} y={y + 16}
+        fontSize={11} fill="white" fontWeight={600}
+        fontFamily="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif"
       >
-        {label.length > 16 ? label.slice(0, 15) + '…' : label}
+        {text}
       </text>
     </g>
   )
 }
 
-function Coin({ phase, show }: { path?: string; phase: number; show: boolean }) {
-  if (!show) return null
-  // Animate a circle along the path using animateMotion
+// ─── Barrier ──────────────────────────────────────────────────────────────────
+
+function Barrier({ x, y1, y2, visible }: { x: number; y1: number; y2: number; visible: boolean }) {
+  if (!visible) return null
   return (
-    <circle r={10} fill="#0F6B5C" opacity={0.95} style={{ filter: 'drop-shadow(0 1px 4px rgba(15,107,92,.4))' }}>
-      <animateMotion
-        key={phase}
-        dur="0.9s"
-        begin="0s"
-        fill="freeze"
-        repeatCount="1"
-        calcMode="spline"
-        keySplines="0.4 0 0.2 1"
-        keyTimes="0;1"
-      >
-        <mpath xlinkHref={`#path-${phase}`} />
-      </animateMotion>
-      <text textAnchor="middle" dominantBaseline="central" fontSize={9} fill="white" fontFamily="sans-serif" fontWeight="700">$</text>
-    </circle>
+    <line
+      x1={x} y1={y1} x2={x} y2={y2}
+      stroke="#B42318" strokeWidth={3.5} strokeLinecap="round"
+      style={{ animation: 'barPulse 0.5s ease-in-out 2' }}
+    />
   )
 }
 
-function Receipt({ x, y, show }: { x: number; y: number; show: boolean }) {
-  if (!show) return null
-  return (
-    <g style={{ animation: show ? 'slideUp 0.4s cubic-bezier(.4,0,.2,1) both' : 'none' }}>
-      <rect x={x} y={y} width={88} height={28} rx={6} fill="#0F6B5C" />
-      <text x={x + 8} y={y + 18} fontSize={10} fill="white" fontFamily="'IBM Plex Sans',sans-serif" fontWeight="600">
-        Receipt ✓
-      </text>
-    </g>
-  )
+// ─── Layout ───────────────────────────────────────────────────────────────────
+
+interface Layout {
+  vw: number; vh: number
+  funder:    { x: number; y: number; w: number; h: number }
+  pot:       { x: number; y: number; w: number; h: number }
+  recip:     { x: number; y: number; w: number; h: number } | null
+  payee1:    { x: number; y: number; w: number; h: number }
+  payee2:    { x: number; y: number; w: number; h: number }
+  blocked:   { x: number; y: number; w: number; h: number }
+  // Bezier paths
+  pathFP:    BezierPath   // funder → pot
+  pathP1:    BezierPath   // pot → payee1
+  pathP2:    BezierPath   // pot → payee2
+  pathBLK:   BezierPath   // pot → blocked (stops 28px before)
+  pathBack:  BezierPath   // pot → funder (return)
+  // Receipt chip positions
+  receipt1:  { x: number; y: number }
+  receipt2:  { x: number; y: number }
+  // Barrier x, y span
+  barrier:   { x: number; y1: number; y2: number }
+  // "Blocked" label
+  blockedLabel: { x: number; y: number }
+  // "Return" label
+  returnLabel:  { x: number; y: number }
+  // Pot text positions (inside pot card)
+  potAmountY: number   // y offset from pot.y for amount text
+  potTitleY:  number   // y offset for pot title
+  landscape:  boolean
+}
+
+function cx(rect: { x: number; w: number }) { return rect.x + rect.w / 2 }
+function cy(rect: { x: number; y: number; w: number; h: number }) { return rect.y + rect.h / 2 }
+function right(rect: { x: number; w: number }) { return rect.x + rect.w }
+function bottom(rect: { y: number; h: number }) { return rect.y + rect.h }
+
+function makeLandscapeLayout(): Layout {
+  const vw = 880, vh = 440
+  const funder  = { x: 24,  y: 175, w: 200, h: 96  }
+  const pot     = { x: 330, y: 125, w: 230, h: 170 }
+  const recip   = { x: 330, y: 330, w: 230, h: 82  }
+  const payee1  = { x: 650, y: 30,  w: 206, h: 86  }
+  const payee2  = { x: 650, y: 140, w: 206, h: 86  }
+  const blocked = { x: 650, y: 272, w: 206, h: 86  }
+
+  const potRC = cx(pot)
+  const potRR = right(pot)
+  const potCY = cy(pot)
+
+  return {
+    vw, vh, funder, pot, recip, payee1, payee2, blocked, landscape: true,
+    pathFP: {
+      p0x: right(funder),     p0y: cy(funder),
+      p1x: right(funder)+40,  p1y: cy(funder),
+      p2x: pot.x - 40,        p2y: potCY,
+      p3x: pot.x,              p3y: potCY,
+    },
+    pathP1: {
+      p0x: potRR,              p0y: potCY - 30,
+      p1x: potRR + 40,         p1y: potCY - 30,
+      p2x: payee1.x - 40,      p2y: cy(payee1),
+      p3x: payee1.x,           p3y: cy(payee1),
+    },
+    pathP2: {
+      p0x: potRR,              p0y: potCY + 10,
+      p1x: potRR + 40,         p1y: potCY + 10,
+      p2x: payee2.x - 40,      p2y: cy(payee2),
+      p3x: payee2.x,           p3y: cy(payee2),
+    },
+    pathBLK: {
+      p0x: potRR,              p0y: potCY + 45,
+      p1x: potRR + 40,         p1y: potCY + 45,
+      p2x: blocked.x - 40,     p2y: cy(blocked),
+      p3x: blocked.x - 28,    p3y: cy(blocked),
+    },
+    pathBack: {
+      p0x: potRC,              p0y: bottom(pot) + 10,
+      p1x: potRC,              p1y: vh - 30,
+      p2x: cx(funder),         p2y: vh - 30,
+      p3x: cx(funder),         p3y: bottom(funder) + 8,
+    },
+    receipt1:    { x: payee1.x - 4,  y: bottom(payee1) + 6 },
+    receipt2:    { x: payee2.x - 4,  y: bottom(payee2) + 6 },
+    barrier:     { x: blocked.x - 6, y1: blocked.y, y2: bottom(blocked) },
+    blockedLabel:{ x: blocked.x,     y: bottom(blocked) + 18 },
+    returnLabel: { x: potRC - 90,    y: vh - 10 },
+    potAmountY:  pot.y + 60,
+    potTitleY:   pot.y + 28,
+  }
+}
+
+function makePortraitLayout(): Layout {
+  const vw = 360, vh = 640
+  const funder  = { x: 80,  y: 16,  w: 200, h: 80  }
+  const pot     = { x: 50,  y: 148, w: 260, h: 150 }
+  const payee1  = { x: 8,   y: 360, w: 168, h: 84  }
+  const payee2  = { x: 184, y: 360, w: 168, h: 84  }
+  const blocked = { x: 40,  y: 472, w: 280, h: 72  }
+
+  const potCX = cx(pot)
+  const potB  = bottom(pot)
+
+  return {
+    vw, vh, funder, pot, recip: null, payee1, payee2, blocked, landscape: false,
+    pathFP: {
+      p0x: cx(funder),   p0y: bottom(funder),
+      p1x: cx(funder),   p1y: bottom(funder) + 30,
+      p2x: potCX,        p2y: pot.y - 30,
+      p3x: potCX,        p3y: pot.y,
+    },
+    pathP1: {
+      p0x: potCX - 30,   p0y: potB,
+      p1x: potCX - 30,   p1y: potB + 30,
+      p2x: cx(payee1),   p2y: payee1.y - 20,
+      p3x: cx(payee1),   p3y: payee1.y,
+    },
+    pathP2: {
+      p0x: potCX + 30,   p0y: potB,
+      p1x: potCX + 30,   p1y: potB + 30,
+      p2x: cx(payee2),   p2y: payee2.y - 20,
+      p3x: cx(payee2),   p3y: payee2.y,
+    },
+    pathBLK: {
+      p0x: potCX,        p0y: potB,
+      p1x: potCX,        p1y: potB + 40,
+      p2x: cx(blocked),  p2y: blocked.y - 20,
+      p3x: cx(blocked),  p3y: blocked.y - 10,
+    },
+    pathBack: {
+      p0x: cx(pot) + 100, p0y: pot.y + 40,
+      p1x: vw - 20,       p1y: pot.y + 40,
+      p2x: vw - 20,       p2y: funder.y + 30,
+      p3x: right(funder), p3y: funder.y + 30,
+    },
+    receipt1:    { x: payee1.x,       y: bottom(payee1) + 5 },
+    receipt2:    { x: payee2.x,       y: bottom(payee2) + 5 },
+    barrier:     { x: cx(blocked), y1: blocked.y - 14, y2: blocked.y + 4 },
+    blockedLabel:{ x: blocked.x + 8, y: bottom(blocked) + 16 },
+    returnLabel: { x: vw - 20,       y: funder.y + 20 },
+    potAmountY:  pot.y + 66,
+    potTitleY:   pot.y + 28,
+  }
 }
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export default function FlowScene({
-  funder, recipient, payees, blocked, potTitle, amount, className = '',
+  funder, recipient, payees, blocked: blockedLabel,
+  potTitle, amountNum, currency = 'USDC', className = '',
 }: FlowSceneProps) {
-  // Detect reduced motion preference
-  const prefersReduced = typeof window !== 'undefined'
-    ? window.matchMedia('(prefers-reduced-motion: reduce)').matches
-    : false
+  const prefersReduced = useMemo(() =>
+    typeof window !== 'undefined'
+      ? window.matchMedia('(prefers-reduced-motion: reduce)').matches
+      : false
+  , [])
 
-  const [phase, setPhase]     = useState(prefersReduced ? 4 : 0)
-  const [playing, setPlaying] = useState(!prefersReduced)
-  const [key, setKey]         = useState(0)   // restart key
+  // ── State ──────────────────────────────────────────────────────────────────
+  const [t, setT]             = useState(0)           // 0–LOOP_MS
+  const [userPaused, setUserP] = useState(false)
+  const [inView, setInView]   = useState(false)
+  const [tabVisible, setTabV] = useState(true)
+  const [layout, setLayout]   = useState<Layout>(makeLandscapeLayout)
+  const [replayKey, setReplay] = useState(0)
 
-  const svgRef      = useRef<SVGSVGElement>(null)
-  const timerRef    = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const phaseRef    = useRef(phase)
-  useEffect(() => { phaseRef.current = phase }, [phase])
+  // ── Refs ───────────────────────────────────────────────────────────────────
+  const wrapperRef  = useRef<HTMLDivElement>(null)
+  const rafRef      = useRef<number | null>(null)
+  const lastTsRef   = useRef<number | null>(null)
+  const tRef        = useRef(0)
+  // Derive playing from flags
+  const playing = inView && tabVisible && !userPaused && !prefersReduced
 
-  // Advance phase
-  const advance = useCallback(() => {
-    setPhase(p => {
-      const next = (p + 1) % PHASES.length
-      return next
-    })
-  }, [])
-
-  // Schedule next phase
-  const schedule = useCallback((currentPhase: number, isPlaying: boolean) => {
-    if (timerRef.current) clearTimeout(timerRef.current)
-    if (!isPlaying) return
-    const dur = PHASES[currentPhase]?.ms ?? 2000
-    timerRef.current = setTimeout(() => {
-      advance()
-    }, dur)
-  }, [advance])
+  // ── rAF loop ───────────────────────────────────────────────────────────────
+  // tickRef holds the latest tick fn; updated in a layout effect (not render) to avoid the refs-in-render lint rule
+  const tickRef = useRef<((ts: number) => void) | null>(null)
+  useLayoutEffect(() => {
+    tickRef.current = (ts: number) => {
+      const prev = lastTsRef.current ?? ts
+      lastTsRef.current = ts
+      const dt = Math.min(ts - prev, 200)
+      tRef.current = (tRef.current + dt) % LOOP_MS
+      setT(tRef.current)
+      if (tickRef.current) rafRef.current = requestAnimationFrame(tickRef.current)
+    }
+  })
 
   useEffect(() => {
-    schedule(phase, playing)
-    return () => { if (timerRef.current) clearTimeout(timerRef.current) }
-  }, [phase, playing, schedule])
+    if (playing) {
+      lastTsRef.current = null
+      if (tickRef.current) rafRef.current = requestAnimationFrame(tickRef.current)
+    } else {
+      if (rafRef.current) cancelAnimationFrame(rafRef.current)
+      rafRef.current = null
+    }
+    return () => {
+      if (rafRef.current) cancelAnimationFrame(rafRef.current)
+    }
+  }, [playing])
 
-  // Pause when off-screen
+  // ── IntersectionObserver — resume on entry, pause on exit ─────────────────
   useEffect(() => {
-    if (!svgRef.current) return
+    const el = wrapperRef.current
+    if (!el) return
     const obs = new IntersectionObserver(([e]) => {
-      if (!e.isIntersecting) setPlaying(false)
-    }, { threshold: 0.2 })
-    obs.observe(svgRef.current)
+      setInView(e.isIntersecting)
+    }, { threshold: 0.15 })
+    obs.observe(el)
     return () => obs.disconnect()
   }, [])
 
-  // Pause when tab hidden
+  // ── Tab visibility ─────────────────────────────────────────────────────────
   useEffect(() => {
-    function handle() { if (document.hidden) setPlaying(false) }
+    function handle() { setTabV(!document.hidden) }
     document.addEventListener('visibilitychange', handle)
     return () => document.removeEventListener('visibilitychange', handle)
   }, [])
 
-  function handleReplay() {
-    setPhase(0)
-    setKey(k => k + 1)
-    setPlaying(true)
+  // ── ResizeObserver ─────────────────────────────────────────────────────────
+  useEffect(() => {
+    const el = wrapperRef.current
+    if (!el) return
+    const obs = new ResizeObserver(([e]) => {
+      const w = e.contentRect.width
+      setLayout(w >= 640 ? makeLandscapeLayout() : makePortraitLayout())
+    })
+    obs.observe(el)
+    return () => obs.disconnect()
+  }, [])
+
+  // ── Replay ─────────────────────────────────────────────────────────────────
+  const handleReplay = useCallback(() => {
+    tRef.current = 0
+    lastTsRef.current = null
+    setT(0)
+    setUserP(false)
+    setReplay(k => k + 1)
+  }, [])
+
+  const handleSeek = useCallback((stepT: number) => {
+    tRef.current = stepT
+    lastTsRef.current = null
+    setT(stepT)
+    setUserP(false)
+  }, [])
+
+  // ── Derived state from t ───────────────────────────────────────────────────
+  const p1Amt  = payee1Amt(amountNum)
+  const p2Amt  = payee2Amt(amountNum)
+  const left   = leftover(amountNum)
+  const curr   = currency
+
+  // Step fractions (0→1)
+  const fFund   = easeInOut(stepFrac(t, S0,       S1 - S0 - 200))
+  const fPay1   = easeInOut(stepFrac(t, S1,       S2 - S1 - 200))
+  const fPay2   = easeInOut(stepFrac(t, S2,       S3 - S2 - 200))
+  const fBlk    = easeInOut(stepFrac(t, S3,       1400))
+  const fBack   = easeInOut(stepFrac(t, S4,       LOOP_MS - S4 - 600))
+
+  // Coin positions
+  function coinPos(path: BezierPath, frac: number): [number, number] {
+    return cubicBezierPoint(
+      path.p0x, path.p0y,
+      path.p1x, path.p1y,
+      path.p2x, path.p2y,
+      path.p3x, path.p3y,
+      frac,
+    )
   }
 
-  function handlePlayPause() {
-    setPlaying(p => !p)
-  }
+  const coinFundPos   = coinPos(layout.pathFP,   fFund)
+  const coinPay1Pos   = coinPos(layout.pathP1,   fPay1)
+  const coinPay2Pos   = coinPos(layout.pathP2,   fPay2)
+  const coinBlkPos    = coinPos(layout.pathBLK,  fBlk)
+  const coinBackPos   = coinPos(layout.pathBack, fBack)
 
-  // Jump to step
-  function handleCaption(idx: number) {
-    setPhase(idx)
-    setKey(k => k + 1)
-    setPlaying(true)
-  }
+  const showCoinFund  = t >= S0  && t < S1 + 200
+  const showCoinPay1  = t >= S1  && t < S2 + 200
+  const showCoinPay2  = t >= S2  && t < S3 + 200
+  const showCoinBlk   = t >= S3  && t < S3 + 1600
+  const showCoinBack  = t >= S4  && t < LOOP_MS - 400
+  const blkShake      = fBlk >= 0.95  // near the barrier
 
-  // Derived visibility flags
-  const fundCoinVisible  = phase === 0
-  const pay1CoinVisible  = phase === 1
-  const pay2CoinVisible  = phase === 2
-  const blkCoinVisible   = phase === 3
-  const backCoinVisible  = phase === 4
-  const pay1Done         = phase >= 2
-  const pay2Done         = phase >= 3
-  const funderActive     = phase === 0 || phase === 4
-  const potActive        = phase >= 0
-  const recipActive      = phase === 1 || phase === 2 || phase === 3
+  const pay1Done      = t >= S2
+  const pay2Done      = t >= S3
+  const showBarrier   = showCoinBlk
+  const showBlkLabel  = t >= S3 + 900
+  const showReceipt1  = pay1Done
+  const showReceipt2  = pay2Done
+  const showReturn    = t >= S4 + 300
 
-  // Caption labels (deduplicated for display)
-  const captionLabels = [
-    '1 · Fund the pot',
-    '2 · Pay approved payees',
-    '3 · Blocked',
-    '4 · Leftovers back',
+  // Pot amount: counts up during phase 0, then counts down as payments happen
+  let potAmt = 0
+  if (t < S1)         potAmt = Math.round(fFund * amountNum)
+  else if (t < S2)    potAmt = Math.round(amountNum - fPay1 * p1Amt)
+  else if (t < S3)    potAmt = Math.round(amountNum - p1Amt - fPay2 * p2Amt)
+  else if (t < S4)    potAmt = left
+  else                potAmt = Math.round(left * (1 - fBack))
+
+  // Path solid-ness (turn solid once coin has traversed)
+  const solidFP  = t >= S1
+  const solidP1  = pay1Done
+  const solidP2  = pay2Done
+
+  // Active step index for caption highlighting
+  const activeStep = t < S1 ? 0 : t < S3 ? 1 : t < S4 ? 2 : 3
+
+  const captionSteps = [
+    { label: '1 · Fund the pot',           t: S0 },
+    { label: '2 · Pay approved payees',    t: S1 },
+    { label: '3 · Blocked if not approved',t: S3 },
+    { label: '4 · Leftovers come back',    t: S4 },
   ]
-  const captionPhaseMap = [0, 1, 3, 4]
 
+  const lyt = layout
+
+  // ── Static (reduced motion) frame ─────────────────────────────────────────
   if (prefersReduced) {
-    // Static frame: show final state with all captions
+    const sl = makeLandscapeLayout()
     return (
-      <div className={`rounded-card border border-[var(--line)] bg-[var(--surface)] p-4 ${className}`} role="img"
-        aria-label={`Earmark flow: the funder locks ${amount} into a pot called "${potTitle}"; the recipient can pay ${payees[0].label} and ${payees[1].label}; payments to ${blocked} are blocked; unspent money returns to the funder.`}>
-        <svg viewBox={`0 0 ${VW} ${VH}`} width="100%" xmlns="http://www.w3.org/2000/svg">
-          <Node x={FUNDER_X} y={FUNDER_Y-26} label={funder.label} Icon={funder.Icon} active />
-          <Node x={POT_X}    y={POT_Y-26}    label={potTitle}     Icon={Lock}        active />
-          <Node x={PAY1_X}   y={PAY1_Y-26}   label={payees[0].label} Icon={payees[0].Icon} success />
-          <Node x={PAY2_X}   y={PAY2_Y-26}   label={payees[1].label} Icon={payees[1].Icon} success />
-          <Node x={BLOCK_X}  y={BLOCK_Y+54}  label={blocked}         Icon={recipient.Icon}  blocked />
+      <div
+        className={`w-full rounded-card border border-[var(--line)] bg-[var(--surface)] p-2 ${className}`}
+        role="img"
+        aria-label={`Earmark flow: the funder locks ${amountNum} ${curr} into a pot called "${potTitle}"; the recipient can pay ${payees[0].label} and ${payees[1].label}; payments to ${blockedLabel} are blocked; unspent money returns to the funder.`}
+      >
+        <svg viewBox={`0 0 ${sl.vw} ${sl.vh}`} width="100%" style={{ display: 'block' }}>
+          <defs><style>{CSS_KEYFRAMES}</style></defs>
+          <path d={bezierD(sl.pathFP)}   fill="none" stroke="#0F6B5C" strokeWidth={2} />
+          <path d={bezierD(sl.pathP1)}   fill="none" stroke="#0F6B5C" strokeWidth={2} />
+          <path d={bezierD(sl.pathP2)}   fill="none" stroke="#0F6B5C" strokeWidth={2} />
+          <path d={bezierD(sl.pathBLK)}  fill="none" stroke="#B42318" strokeWidth={2} strokeDasharray="6 4" />
+          <Card {...sl.funder}  Icon={funder.Icon}    label="FUNDER"          title={funder.label} active />
+          <Card {...sl.pot}     Icon={Lock}            label="POT"             title={potTitle} subtext={`${amountNum} ${curr}`} accent />
+          <Card {...sl.payee1}  Icon={payees[0].Icon}  label="PAYEE 1"         title={payees[0].label} success />
+          <Card {...sl.payee2}  Icon={payees[1].Icon}  label="PAYEE 2"         title={payees[1].label} success />
+          <Card {...sl.blocked} Icon={recipient.Icon}  label="BLOCKED"         title={blockedLabel} blocked />
+          {sl.recip && <Card {...sl.recip} Icon={recipient.Icon} label="RECIPIENT" title={recipient.label} active />}
+          <ReceiptChip {...sl.receipt1} visible text={`Receipt · ${p1Amt} ${curr}`} />
+          <ReceiptChip {...sl.receipt2} visible text={`Receipt · ${p2Amt} ${curr}`} />
+          <SvgText x={sl.blockedLabel.x} y={sl.blockedLabel.y} fontSize={11} fill="#B42318" fontWeight={600}>Blocked by the contract</SvgText>
+          <SvgText x={sl.returnLabel.x}  y={sl.returnLabel.y}  fontSize={11} fill="#5B6775">Unspent money returns to the funder</SvgText>
         </svg>
-        <div className="mt-2 flex flex-wrap gap-2">
-          {captionLabels.map(l => (
-            <span key={l} className="rounded-full bg-[var(--accent-soft)] px-3 py-1 text-xs font-medium text-[var(--accent)]">{l}</span>
+        <div className="mt-2 flex flex-wrap gap-2 px-2 pb-2">
+          {captionSteps.map(s => (
+            <span key={s.label} className="rounded-full bg-[var(--accent-soft)] px-3 py-1 text-xs font-medium text-[var(--accent)]">{s.label}</span>
           ))}
         </div>
       </div>
     )
   }
 
+  // ── Animated frame ─────────────────────────────────────────────────────────
   return (
-    <div className={`rounded-card border border-[var(--line)] bg-[var(--surface)] overflow-hidden ${className}`}>
+    <div
+      ref={wrapperRef}
+      className={`w-full rounded-card border border-[var(--line)] bg-[var(--surface)] overflow-hidden ${className}`}
+    >
       <svg
-        key={key}
-        ref={svgRef}
-        viewBox={`0 0 ${VW} ${VH}`}
+        key={replayKey}
+        viewBox={`0 0 ${lyt.vw} ${lyt.vh}`}
         width="100%"
-        xmlns="http://www.w3.org/2000/svg"
+        style={{ display: 'block' }}
         role="img"
-        aria-label={`Earmark flow: the funder locks ${amount} into a pot called "${potTitle}"; the recipient can pay ${payees[0].label} and ${payees[1].label}; payments to ${blocked} are blocked; unspent money returns to the funder.`}
-        style={{ display: 'block', minHeight: 200 }}
+        aria-label={`Earmark flow: the funder locks ${amountNum} ${curr} into a pot called "${potTitle}"; the recipient can pay ${payees[0].label} and ${payees[1].label}; payments to ${blockedLabel} are blocked; unspent money returns to the funder.`}
       >
-        <style>{`
-          @keyframes slideUp { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
-          @keyframes shake   { 0%,100%{transform:translateX(0)}25%{transform:translateX(-4px)}75%{transform:translateX(4px)} }
-          @keyframes pulse   { 0%,100%{transform:scale(1)}50%{transform:scale(1.08)} }
-        `}</style>
+        <defs><style>{CSS_KEYFRAMES}</style></defs>
 
-        {/* Hidden path defs for animateMotion */}
-        <defs>
-          <path id="path-0" d={PATH_FP}   />
-          <path id="path-1" d={PATH_P1}   />
-          <path id="path-2" d={PATH_P2}   />
-          <path id="path-3" d={PATH_BLK}  />
-          <path id="path-4" d={PATH_BACK} />
-        </defs>
+        {/* ── Paths (dashed until traversed, solid after) ── */}
+        <path d={bezierD(lyt.pathFP)}  fill="none" stroke={solidFP ? '#0F6B5C' : '#DCE1E6'} strokeWidth={2} strokeDasharray={solidFP ? undefined : '6 4'} />
+        <path d={bezierD(lyt.pathP1)}  fill="none" stroke={solidP1 ? '#0F6B5C' : '#DCE1E6'} strokeWidth={2} strokeDasharray={solidP1 ? undefined : '6 4'} />
+        <path d={bezierD(lyt.pathP2)}  fill="none" stroke={solidP2 ? '#0F6B5C' : '#DCE1E6'} strokeWidth={2} strokeDasharray={solidP2 ? undefined : '6 4'} />
+        <path d={bezierD(lyt.pathBLK)} fill="none" stroke={showCoinBlk ? '#B42318' : '#DCE1E6'} strokeWidth={2} strokeDasharray="6 4" />
+        <path d={bezierD(lyt.pathBack)}fill="none" stroke={showCoinBack ? '#5B6775' : '#DCE1E6'} strokeWidth={2} strokeDasharray="6 4" />
 
-        {/* ── Background paths (dashed until active) ── */}
-        <path d={PATH_FP}  fill="none" stroke={phase >= 1 ? '#0F6B5C' : '#DCE1E6'} strokeWidth={2} strokeDasharray={phase >= 1 ? 'none' : '6 4'} style={{ transition: 'stroke 0.4s' }} />
-        <path d={PATH_P1}  fill="none" stroke={pay1Done   ? '#0F6B5C' : '#DCE1E6'} strokeWidth={2} strokeDasharray={pay1Done   ? 'none' : '6 4'} style={{ transition: 'stroke 0.4s' }} />
-        <path d={PATH_P2}  fill="none" stroke={pay2Done   ? '#0F6B5C' : '#DCE1E6'} strokeWidth={2} strokeDasharray={pay2Done   ? 'none' : '6 4'} style={{ transition: 'stroke 0.4s' }} />
-        <path d={PATH_BLK} fill="none" stroke={phase === 3 ? '#B42318' : '#DCE1E6'} strokeWidth={2} strokeDasharray="6 4"  style={{ transition: 'stroke 0.4s' }} />
-
-        {/* ── Nodes ── */}
-        {/* Funder */}
-        <Node x={FUNDER_X} y={FUNDER_Y - 26} label={funder.label}    Icon={funder.Icon}    active={funderActive} />
-        {/* Pot */}
-        <Node x={POT_X}    y={POT_Y - 26}    label={potTitle}        Icon={Lock}           active={potActive} />
-        {/* Amount badge on pot */}
-        <rect x={POT_X + 4} y={POT_Y + 28} width={112} height={20} rx={4} fill={phase >= 1 ? '#0F6B5C' : '#E3F1EE'} style={{ transition: 'fill 0.5s' }} />
-        <text x={POT_X + 10} y={POT_Y + 42} fontSize={11} fontFamily="'IBM Plex Mono',monospace" fill="white" fontWeight="600">{amount}</text>
-        {/* Payees */}
-        <Node x={PAY1_X}  y={PAY1_Y - 26}   label={payees[0].label} Icon={payees[0].Icon} active={phase === 1} success={pay1Done} />
-        <Node x={PAY2_X}  y={PAY2_Y - 26}   label={payees[1].label} Icon={payees[1].Icon} active={phase === 2} success={pay2Done} />
-        {/* Blocked */}
-        <Node x={BLOCK_X} y={BLOCK_Y + 54}  label={blocked}         Icon={recipient.Icon} blocked={phase === 3} />
-        {/* Recipient */}
-        <Node x={RECIP_X - 60} y={RECIP_Y}  label={recipient.label} Icon={recipient.Icon} active={recipActive} />
-
-        {/* ── Red barrier ── */}
-        {phase === 3 && (
-          <line
-            x1={BLOCK_X - 2} y1={BLOCK_Y + 40} x2={BLOCK_X - 2} y2={BLOCK_Y + 80}
-            stroke="#B42318" strokeWidth={3} strokeLinecap="round"
-            style={{ animation: 'pulse 0.6s ease-in-out 2' }}
+        {/* ── Cards (behind coins) ── */}
+        <Card {...lyt.funder}
+          Icon={funder.Icon} label="FUNDER" title={funder.label}
+          active={t < S1 || showReturn}
+        />
+        <Card {...lyt.pot}
+          Icon={Lock} label="POT" title={potTitle}
+          subtext={`${potAmt} ${curr}`}
+          accent
+        />
+        <Card {...lyt.payee1}
+          Icon={payees[0].Icon} label="PAYEE 1" title={payees[0].label}
+          active={showCoinPay1} success={pay1Done}
+        />
+        <Card {...lyt.payee2}
+          Icon={payees[1].Icon} label="PAYEE 2" title={payees[1].label}
+          active={showCoinPay2} success={pay2Done}
+        />
+        <Card {...lyt.blocked}
+          Icon={recipient.Icon} label="BLOCKED" title={blockedLabel}
+          blocked={showCoinBlk}
+        />
+        {lyt.recip && (
+          <Card {...lyt.recip}
+            Icon={recipient.Icon} label="RECIPIENT" title={recipient.label}
+            active={t >= S1 && t < S4}
           />
         )}
-        {phase === 3 && (
-          <text x={BLOCK_X - 40} y={BLOCK_Y + 100} fontSize={10} fill="#B42318" fontFamily="'IBM Plex Sans',sans-serif" fontWeight="600" textAnchor="middle">
-            Blocked: not an approved payee
-          </text>
+
+        {/* ── Receipt chips (always above cards) ── */}
+        <ReceiptChip {...lyt.receipt1} visible={showReceipt1} text={`Receipt · ${p1Amt} ${curr}`} />
+        <ReceiptChip {...lyt.receipt2} visible={showReceipt2} text={`Receipt · ${p2Amt} ${curr}`} />
+
+        {/* ── Barrier ── */}
+        <Barrier {...lyt.barrier} visible={showBarrier} />
+
+        {/* ── Labels ── */}
+        {showBlkLabel && (
+          <SvgText
+            x={lyt.blockedLabel.x} y={lyt.blockedLabel.y}
+            fontSize={11} fill="#B42318" fontWeight={600}
+          >
+            Blocked by the contract
+          </SvgText>
         )}
-
-        {/* ── Receipts ── */}
-        <Receipt x={PAY1_X + 4}  y={PAY1_Y + 28} show={pay1Done} />
-        <Receipt x={PAY2_X + 4}  y={PAY2_Y + 28} show={pay2Done} />
-
-        {/* ── Coins (via animateMotion) ── */}
-        {fundCoinVisible  && <Coin path={PATH_FP}   phase={0} show />}
-        {pay1CoinVisible  && <Coin path={PATH_P1}   phase={1} show />}
-        {pay2CoinVisible  && <Coin path={PATH_P2}   phase={2} show />}
-        {blkCoinVisible   && <Coin path={PATH_BLK}  phase={3} show />}
-        {backCoinVisible  && <Coin path={PATH_BACK} phase={4} show />}
-
-        {/* ── "back to funder" label ── */}
-        {phase === 4 && (
-          <text
-            x={(cx(FUNDER_X) + cx(POT_X)) / 2}
-            y={FUNDER_Y - 52}
-            fontSize={10} fill="#5B6775" fontFamily="'IBM Plex Sans',sans-serif"
-            textAnchor="middle"
-            style={{ animation: 'slideUp 0.4s ease both' }}
+        {showReturn && (
+          <SvgText
+            x={lyt.returnLabel.x} y={lyt.returnLabel.y}
+            fontSize={11} fill="#5B6775"
           >
             Unspent money returns to the funder
-          </text>
+          </SvgText>
         )}
+
+        {/* ── Coins (always on top) ── */}
+        {showCoinFund  && <Coin cx={coinFundPos[0]}  cy={coinFundPos[1]}  visible />}
+        {showCoinPay1  && <Coin cx={coinPay1Pos[0]}  cy={coinPay1Pos[1]}  visible />}
+        {showCoinPay2  && <Coin cx={coinPay2Pos[0]}  cy={coinPay2Pos[1]}  visible />}
+        {showCoinBlk   && <Coin cx={coinBlkPos[0]}   cy={coinBlkPos[1]}   visible shake={blkShake} />}
+        {showCoinBack  && <Coin cx={coinBackPos[0]}  cy={coinBackPos[1]}  visible />}
       </svg>
 
-      {/* ── Captions row ── */}
-      <div className="flex flex-wrap items-center gap-2 px-4 pb-3 pt-1" role="list" aria-label="Flow steps">
-        {captionLabels.map((label, i) => {
-          const isActive = phase === captionPhaseMap[i] || (i === 1 && phase === 2)
-          return (
-            <button
-              key={label}
-              role="listitem"
-              onClick={() => handleCaption(captionPhaseMap[i])}
-              className="rounded-full px-3 py-1 text-xs font-medium transition-colors focus-visible:outline-2 focus-visible:outline-[var(--focus)]"
-              style={{
-                background: isActive ? 'var(--accent)' : 'var(--accent-soft)',
-                color:      isActive ? 'white' : 'var(--accent)',
-              }}
-              aria-current={isActive ? 'step' : undefined}
-            >
-              {label}
-            </button>
-          )
-        })}
+      {/* ── Captions ── */}
+      <div className="flex flex-wrap items-center gap-2 px-4 pb-2 pt-1" role="list" aria-label="Flow steps">
+        {captionSteps.map((s, i) => (
+          <button
+            key={s.label}
+            role="listitem"
+            onClick={() => handleSeek(s.t)}
+            className="rounded-full px-3 py-1 text-xs font-medium transition-colors focus-visible:outline-2 focus-visible:outline-[var(--focus)]"
+            style={{
+              background: activeStep === i ? 'var(--accent)'      : 'var(--accent-soft)',
+              color:      activeStep === i ? 'white'              : 'var(--accent)',
+            }}
+            aria-current={activeStep === i ? 'step' : undefined}
+          >
+            {s.label}
+          </button>
+        ))}
       </div>
 
       {/* ── Controls ── */}
       <div className="flex items-center gap-2 px-4 pb-3">
         <button
-          onClick={handlePlayPause}
-          aria-label={playing ? 'Pause animation' : 'Play animation'}
+          onClick={() => setUserP(p => !p)}
+          aria-label={userPaused ? 'Play animation' : 'Pause animation'}
           className="rounded p-1.5 text-[var(--muted)] hover:bg-[var(--surface-2)] hover:text-[var(--ink)] focus-visible:outline-2 focus-visible:outline-[var(--focus)] transition-colors"
         >
-          {playing ? <Pause className="size-4" aria-hidden /> : <Play className="size-4" aria-hidden />}
+          {userPaused
+            ? <Play    className="size-4" aria-hidden />
+            : <Pause   className="size-4" aria-hidden />}
         </button>
         <button
           onClick={handleReplay}
@@ -378,10 +729,30 @@ export default function FlowScene({
         >
           <RotateCcw className="size-4" aria-hidden />
         </button>
+        <span className="ml-1 text-xs text-[var(--muted)]">
+          {!inView ? 'Paused (scroll into view to play)' : userPaused ? 'Paused' : ''}
+        </span>
       </div>
     </div>
   )
 }
 
-// Re-export Lock so callers don't need to import it separately
-import { Lock } from 'lucide-react'
+// ─── CSS keyframes (injected once into each SVG) ──────────────────────────────
+
+const CSS_KEYFRAMES = `
+  @keyframes chipSlide {
+    from { opacity: 0; transform: translateY(6px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes coinShake {
+    0%,100% { transform: translateX(0); }
+    25%      { transform: translateX(-4px); }
+    75%      { transform: translateX(4px); }
+  }
+  @keyframes barPulse {
+    0%,100% { opacity: 1; }
+    50%      { opacity: 0.5; }
+  }
+`
+
+

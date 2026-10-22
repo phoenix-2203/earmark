@@ -163,7 +163,8 @@ export default function HowItWorksPage({ onBack, onSend, onAbout }: Props) {
             payees={SCENE_PAYEES}
             blocked="Family's own wallet"
             potTitle="School fees · Term 1"
-            amount="500 USDC"
+            amountNum={500}
+            currency="USDC"
           />
         </section>
 
