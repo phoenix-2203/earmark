@@ -11,7 +11,6 @@ import { useState, useCallback } from 'react'
 import { usePot, usePayments, usePayees } from '@/hooks/useEarmark'
 import { usePaidEventTxHash } from '@/hooks/useEventTxHash'
 import { EARMARK_CHAIN } from '@/earmarkConfig'
-import { CATEGORY_NAMES } from '@/earmarkTypes'
 import { formatUsdc, shortAddr, formatDateTime } from '@/utils/format'
 import { downloadReceiptPng, receiptPngFile } from '@/utils/receiptCanvas'
 import CategoryBadge from '@/components/CategoryBadge'
@@ -128,7 +127,6 @@ export default function ReceiptPage({ potId, paymentIndex, onBack }: Props) {
   const payeeEntry = (payees ?? []).find(
     (p) => p.address.toLowerCase() === payment.payee.toLowerCase()
   )
-  const categoryName = CATEGORY_NAMES[(pot as { category: number }).category] ?? 'Other'
   const dataReady    = !loading   // tx hash optional — still allow download
 
   // Does the browser support file sharing?
@@ -254,7 +252,6 @@ export default function ReceiptPage({ potId, paymentIndex, onBack }: Props) {
           <Row label="Date and time" value={formatDateTime(payment.timestamp)} />
           <Row label="Pot"           value={`#${potId}`} />
           <Row label="Network"       value={EARMARK_CHAIN.name} />
-          <Row label="Category"      value={categoryName} />
 
           {txHash && (
             <div>
