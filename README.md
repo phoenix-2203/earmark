@@ -10,13 +10,15 @@
 
 ## Earmark in 30 seconds
 
-You send your brother **500 USDC for school fees**. With a normal transfer, the money is his: it can be spent on anything, and you have no proof of where it went.
+Your company hires a contractor to fit out a new office and gives them a **5,000 USDC materials budget**. With a normal transfer, the money is theirs: it can be spent on anything, and you only find out later where it went.
 
-With Earmark, you put the 500 USDC into a **pot** labelled "School fees · Term 1" and you approve **Greenfield School** and **City Bookshop** as the only places it can go. Your brother can still decide **when** to pay and **how much**, but the smart contract will **only** send money to those two. If he tries to pay himself or anyone else, the payment is blocked.
+With Earmark, you put the 5,000 USDC into a **pot** labelled "Office fit-out · Phase 1" and approve **Halden Building Supplies** and **Brightline Electrical** as the only places it can go. The contractor still decides **when** to pay and **how much**, but the smart contract will **only** send money to those two. If anyone tries to pay the contractor's own wallet or anyone else, the payment is blocked.
 
-Every payment comes with a **public receipt** (amount, memo, who was paid) that anyone can check from a link or a QR code. If money is left over after the end date, **you take it back**.
+Every payment comes with a **public receipt** (amount, memo such as "PO-1042 · materials", who was paid) that anyone can check from a link or a QR code. If money is left over after the end date, **it comes back to you**.
 
-> Think of it as giving someone a prepaid card that only works at the shops you chose, with every swipe visible to both of you.
+> Think of it as a company card that only works with the suppliers you approved, with every transaction visible to both sides.
+
+The same pattern works for a grant that must reach a university, an NGO's relief budget, an employee's travel allowance, or money sent home for rent and school fees.
 
 ---
 
@@ -24,13 +26,13 @@ Every payment comes with a **public receipt** (amount, memo, who was paid) that 
 
 | Situation | Funder (puts the money in) | Recipient (spends it) | Approved payees (can be paid) |
 |---|---|---|---|
-| **Money sent home** | You, working abroad | Your brother or parent | The school, the landlord, the hospital |
-| **Household bills** | Parent or flatmate who covers bills | The person who handles the bills | Electricity company, internet provider, water board |
-| **Freelance work** | A client | The freelancer | The suppliers the job needs: a hardware store, a print shop, a hosting provider |
-| **Staff allowances** | A company | An employee travelling for work | Approved hotels, transport companies |
-| **Grants and scholarships** | A foundation or sponsor | A student or researcher | The university, the lab supplier |
-| **Aid and relief** | An NGO | A family receiving support | A pharmacy, a clinic, a food supplier |
-| **Event budgets** | A couple or organiser | The event planner | The caterer, the venue, the decorator |
+| **Project budgets** | A company or client | A contractor or project lead | The suppliers the job needs: building supplies, electrical, hosting |
+| **Staff allowances** | A company | An employee travelling for work | Approved hotels, airlines, transport companies |
+| **Grants and scholarships** | A foundation or sponsor | A researcher or student | The university, the lab supplier |
+| **Aid and relief** | An NGO | A household receiving support | A pharmacy, a clinic, a food supplier |
+| **Event budgets** | A company or organiser | The event planner | The caterer, the venue, the AV company |
+| **Household bills** | Whoever covers the bills | Whoever handles them | Electricity company, internet provider, water board |
+| **Money sent home** | Someone working abroad | A relative | The landlord, the school, the hospital |
 
 In every case, the person spending the money can't send it to themselves or anyone the funder hasn't approved.
 
@@ -49,9 +51,9 @@ In every case, the person spending the money can't send it to themselves or anyo
 
 ## How it works, step by step
 
-1. **Create a pot.** The funder sets a purpose ("School fees · Term 1"), an amount in USDC, an end date, and at least one approved payee (a wallet address plus a name such as "Greenfield School").
-2. **Approve who can be paid.** Only those addresses can receive money from the pot. The recipient can **ask** for a new payee (for example a new clinic); the funder approves or rejects it.
-3. **The recipient pays.** They pick an approved payee, an amount and a memo ("Term 1, invoice 0042"). The contract checks the rules and sends the USDC straight to the payee.
+1. **Create a pot.** The funder sets a purpose ("Office fit-out · Phase 1"), an amount in USDC, an end date, and at least one approved payee (a wallet address plus a name such as "Halden Building Supplies").
+2. **Approve who can be paid.** Only those addresses can receive money from the pot. The recipient can **ask** for a new payee (for example a new supplier); the funder approves or rejects it.
+3. **The recipient pays.** They pick an approved payee, an amount and a memo ("PO-1042 · materials"). The contract checks the rules and sends the USDC straight to the payee.
 4. **Anyone can verify.** Each payment has a public receipt page with a QR code, plus a downloadable receipt image, linked to the transaction on the Arc explorer.
 5. **Leftovers.** After the end date the funder can take back what's unspent. At any time, the funder can choose to release the rest to the recipient with no restrictions.
 
@@ -72,7 +74,7 @@ In every case, the person spending the money can't send it to themselves or anyo
 - Unspent money returns to the funder after the end date.
 
 **Not guaranteed:**
-- Earmark can't verify **who owns** an address. Get the school's or supplier's wallet address from them directly.
+- Earmark can't verify **who owns** an address. Get a supplier's wallet address from the supplier directly.
 - Payments can't be reversed.
 - Only USDC on Arc is supported.
 
@@ -141,7 +143,7 @@ Planned, not built yet:
 - **Fee sponsorship**, so new users can pay with 0 USDC in their wallet.
 - **A shareable recipient ID** instead of long wallet addresses.
 - **Top-ups straight from an exchange.**
-- **Cash-out to local currency** for schools, landlords and suppliers.
+- **Cash-out to local currency** for suppliers, landlords and institutions.
 
 ## License
 
