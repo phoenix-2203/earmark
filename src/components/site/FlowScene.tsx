@@ -665,8 +665,8 @@ export default function FlowScene({
   ]
 
   // Paid lines for payee cards (fix #1: inside card, no floating chip)
-  const paidLine1 = pay1Done ? `✓ Paid ${p1Amt} ${curr} · receipt` : undefined
-  const paidLine2 = pay2Done ? `✓ Paid ${p2Amt} ${curr} · receipt` : undefined
+  const paidLine1 = pay1Done ? `✓ Paid ${p1Amt} ${curr}` : undefined
+  const paidLine2 = pay2Done ? `✓ Paid ${p2Amt} ${curr}` : undefined
 
   // ── Static (reduced motion) frame ─────────────────────────────────────────
   if (prefersReduced) {
@@ -685,8 +685,8 @@ export default function FlowScene({
           <path d={bezierD(sl.pathBLK)} fill="none" stroke="#B42318" strokeWidth={2} strokeDasharray="6 4" />
           <Card {...sl.funder}  Icon={funder.Icon}   caption="FUNDER"  title={funder.label}  active />
           <PotCard {...sl.pot} potTitle={potTitle} potAmt={amountNum} currency={curr} payeeLabels={[payees[0].label, payees[1].label]} />
-          <Card {...sl.payee1} Icon={payees[0].Icon} caption="PAYEE 1" title={payees[0].label} success paidLine={`✓ Paid ${p1Amt} ${curr} · receipt`} />
-          <Card {...sl.payee2} Icon={payees[1].Icon} caption="PAYEE 2" title={payees[1].label} success paidLine={`✓ Paid ${p2Amt} ${curr} · receipt`} />
+          <Card {...sl.payee1} Icon={payees[0].Icon} caption="PAYEE 1" title={payees[0].label} success paidLine={`✓ Paid ${p1Amt} ${curr}`} />
+          <Card {...sl.payee2} Icon={payees[1].Icon} caption="PAYEE 2" title={payees[1].label} success paidLine={`✓ Paid ${p2Amt} ${curr}`} />
           <Card {...sl.blocked} Icon={recipient.Icon} caption="BLOCKED" title={blockedLabel} blocked />
           {sl.recip && <Card {...sl.recip} Icon={recipient.Icon} caption="RECIPIENT" title={recipient.label} active />}
           <SvgText x={sl.blockedLabel.x} y={sl.blockedLabel.y} fontSize={11} fill="#B42318" fontWeight={600} textAnchor={sl.blockedLabel.anchor}>Blocked by the contract</SvgText>
