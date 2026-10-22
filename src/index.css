@@ -92,3 +92,41 @@ a, button { transition: color 150ms, background-color 150ms, border-color 150ms,
 /* ─── FAQ chevron (details/summary) ─────────────────────────────────────── */
 details summary::-webkit-details-marker { display: none; }
 details[open] > summary .chevron-icon { transform: rotate(180deg); }
+
+/* ─── Print stylesheet (receipt page) ───────────────────────────────────── */
+@media print {
+  /* Hide everything except the receipt card */
+  body > * { display: none !important; }
+  #root      { display: block !important; }
+
+  /* Hide all UI chrome */
+  header, nav, footer,
+  .receipt-actions,
+  .arc-studio-watermark,
+  [data-sonner-toaster] { display: none !important; }
+
+  /* Show only the receipt card */
+  .receipt-card { display: block !important; }
+
+  /* Reset margins and background for print */
+  @page { margin: 16mm; size: A4 portrait; }
+
+  body {
+    background: white !important;
+    font-size: 11pt;
+    color: #000;
+  }
+
+  /* Ensure cards render cleanly (no box-shadows on paper) */
+  .receipt-card * {
+    box-shadow: none !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* Avoid page breaks inside cards */
+  .receipt-card > * { break-inside: avoid; page-break-inside: avoid; }
+
+  /* Remove bottom padding from main */
+  main { padding-bottom: 0 !important; }
+}
