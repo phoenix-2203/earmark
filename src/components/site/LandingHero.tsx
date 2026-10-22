@@ -1,6 +1,22 @@
 /**
  * Landing Hero — section 1.
  * Two columns on desktop (text left, interactive diagram right), stacked on mobile.
+ *
+ * COORDINATE SYSTEM — viewBox "0 0 400 320"
+ *
+ *  Padding:      16px on every edge
+ *
+ *  Column 1 (Funder):       x=16..100   centre x=58
+ *  Column 2 (Pot):          x=118..218  centre x=168  (width=100 to fit tag text)
+ *  Column 3 (payees):       x=238..384  centre x=311  (width=82)
+ *
+ *  Row A (Funder / Greenfield):  centre y=110
+ *  Row B (Pot centre):           centre y=148
+ *  Row C (City Clinic):          centre y=196
+ *  Row D (blocked):              centre y=272
+ *
+ *  Receipt chip: x=238..370, y=153..175  (below Greenfield, above City Clinic)
+ *  Right edge of rightmost element: 384 → 16px from viewBox edge ✓
  */
 import { useRef, useState, useEffect, useCallback } from 'react'
 import { ArrowRight, RotateCcw } from 'lucide-react'
@@ -22,7 +38,7 @@ export default function LandingHero({ onSend }: Props) {
         {/* Left: copy */}
         <div className="max-w-lg">
           <h1
-            className="display mb-4 text-4xl font-semibold text-[var(--ink)] text-balance leading-tight"
+            className="display mb-4 font-semibold text-[var(--ink)] text-balance leading-tight"
             style={{ letterSpacing: '-0.025em', fontSize: 'clamp(2rem,5vw,3rem)' }}
           >
             Money with a purpose.
@@ -48,9 +64,18 @@ export default function LandingHero({ onSend }: Props) {
 
           {/* Trust line */}
           <p className="text-xs text-[var(--muted)] flex flex-wrap gap-x-3 gap-y-1">
-            <span className="flex items-center gap-1"><span className="size-1.5 rounded-full bg-[var(--success)] inline-block" aria-hidden />Live on Arc</span>
-            <span className="flex items-center gap-1"><span className="size-1.5 rounded-full bg-[var(--accent)] inline-block" aria-hidden />Open source</span>
-            <span className="flex items-center gap-1"><span className="size-1.5 rounded-full bg-[var(--muted)] inline-block" aria-hidden />No admin key</span>
+            <span className="flex items-center gap-1">
+              <span className="size-1.5 rounded-full bg-[var(--success)] inline-block" aria-hidden />
+              Live on Arc
+            </span>
+            <span className="flex items-center gap-1">
+              <span className="size-1.5 rounded-full bg-[var(--accent)] inline-block" aria-hidden />
+              Open source
+            </span>
+            <span className="flex items-center gap-1">
+              <span className="size-1.5 rounded-full bg-[var(--muted)] inline-block" aria-hidden />
+              No admin key
+            </span>
           </p>
         </div>
 
@@ -67,24 +92,31 @@ export default function LandingHero({ onSend }: Props) {
 
 type AnimState = 'idle' | 'fund' | 'pay-ok' | 'pay-blocked' | 'done-ok' | 'done-blocked'
 
-/*
- * Coordinate system — viewBox "0 0 360 340"
- *
- *  Funder        (20, 130)  w=80  h=44
- *  Pot           (150, 118) w=80  h=64
- *  Greenfield    (280, 72)  w=80  h=44   ← approved payee 1
- *  City Clinic   (280, 164) w=80  h=44   ← approved payee 2
- *  Any other     (150, 252) w=80  h=38   ← blocked
- *  Receipt chip  below Greenfield node (inside SVG, y≈128)
- */
+// ── Layout constants ──────────────────────────────────────────────────────────
+// viewBox: 400 × 320  (all nodes fit within x ∈ [16,384], y ∈ [16,304])
 
-// Node centres
+// Funder node   top-left (16, 88),  w=84, h=44  → centre (58, 110)
+const FX = 16,  FY = 88,  FW = 84, FH = 44
+// Pot node      top-left (118,116), w=100, h=64 → centre (168, 148)
+const PX = 118, PY = 116, PW = 100, PH = 64
+// Payee nodes   top-left (238, …), w=82, h=44
+const NX = 238, NW = 82, NH = 44
+// Greenfield    top-left (238, 88)  → centre (279, 110)
+const GY = 88
+// City Clinic   top-left (238,174)  → centre (279, 196)
+const KY = 174
+// Blocked node  top-left (119,246)  w=100, h=42 → centre (169, 267)
+const BX = 119, BY = 246, BW = 100, BH = 42
+// Receipt chip  below Greenfield, above City Clinic: x=238, y=142, w=146, h=24
+const RX = 238, RY = 142, RW = 146, RH = 24
+
+// Node centres (for dot animation)
 const C = {
-  funder:     { x: 60,  y: 152 },
-  pot:        { x: 190, y: 150 },
-  greenfield: { x: 320, y: 94  },
-  clinic:     { x: 320, y: 186 },
-  blocked:    { x: 190, y: 271 },
+  funder:     { x: FX + FW / 2,          y: FY + FH / 2 },          // 58, 110
+  pot:        { x: PX + PW / 2,          y: PY + PH / 2 },          // 168, 148
+  greenfield: { x: NX + NW / 2,          y: GY + NH / 2 },          // 279, 110
+  clinic:     { x: NX + NW / 2,          y: KY + NH / 2 },          // 279, 196
+  blocked:    { x: BX + BW / 2,          y: BY + BH / 2 },          // 169, 267
 } as const
 
 function FlowDiagram() {
@@ -132,10 +164,13 @@ function FlowDiagram() {
   }, [replay])
 
   const dot = dotPosition(state)
-  // Hide dot once animation is fully settled so it doesn't sit on a label
-  const showDot = dot !== null && state !== 'done-ok' && state !== 'done-blocked'
+  // Hide dot once settled so it doesn't sit on a label
+  const showDot    = dot !== null && state !== 'done-ok' && state !== 'done-blocked'
   const showReceipt = state === 'done-ok'
   const showBlock   = state === 'done-blocked' || state === 'pay-blocked'
+
+  // Shorthand centres
+  const fc = C.funder, pc = C.pot, gc = C.greenfield, kc = C.clinic, bc = C.blocked
 
   return (
     <figure className="w-full max-w-[480px]" aria-label="Illustration of how Earmark works">
@@ -143,78 +178,134 @@ function FlowDiagram() {
         className="rounded-card border border-[var(--line)] bg-[var(--surface)] shadow-card overflow-hidden"
         style={{ minHeight: 360 }}
       >
-        {/* SVG — viewBox sized to fill the card comfortably */}
+        {/* SVG fills the card; viewBox 400×320 gives ≥16px padding on every side */}
         <svg
-          viewBox="0 0 360 340"
+          viewBox="0 0 400 320"
           width="100%"
           aria-hidden
           className="block"
           style={{ minHeight: 300 }}
         >
-          {/* ── Funder ── */}
-          <rect x="20" y="130" width="80" height="44" rx="10"
+          {/* ── Funder ─────────────────────────────────────────────────────── */}
+          <rect x={FX} y={FY} width={FW} height={FH} rx="10"
             fill="var(--accent-soft)" stroke="var(--accent)" strokeWidth="1.5"/>
-          <text x="60" y="148" textAnchor="middle" fill="var(--accent)" fontSize="11" fontWeight="700" fontFamily="IBM Plex Sans,sans-serif">FUNDER</text>
-          <text x="60" y="163" textAnchor="middle" fill="var(--muted)" fontSize="10" fontFamily="IBM Plex Mono,monospace">0xF0…01</text>
+          <text x={fc.x} y={FY+18} textAnchor="middle"
+            fill="var(--accent)" fontSize="11" fontWeight="700" fontFamily="IBM Plex Sans,sans-serif">
+            FUNDER
+          </text>
+          <text x={fc.x} y={FY+33} textAnchor="middle"
+            fill="var(--muted)" fontSize="9.5" fontFamily="IBM Plex Mono,monospace">
+            0xF0…01
+          </text>
 
-          {/* ── Arrow funder→pot ── */}
-          <line x1="100" y1="152" x2="140" y2="152" stroke="var(--line)" strokeWidth="1.5" strokeDasharray="4 3"/>
-          <polygon points="140,147 150,152 140,157" fill="var(--accent)" opacity="0.6"/>
+          {/* ── Arrow funder → pot ─────────────────────────────────────────── */}
+          <line x1={FX+FW} y1={fc.y} x2={PX-8} y2={pc.y}
+            stroke="var(--line)" strokeWidth="1.5" strokeDasharray="4 3"/>
+          <polygon
+            points={`${PX-8},${pc.y-5} ${PX},${pc.y} ${PX-8},${pc.y+5}`}
+            fill="var(--accent)" opacity="0.6"/>
 
-          {/* ── Pot ── */}
-          <rect x="150" y="118" width="80" height="64" rx="12"
+          {/* ── Pot ────────────────────────────────────────────────────────── */}
+          <rect x={PX} y={PY} width={PW} height={PH} rx="12"
             fill="var(--accent-soft)" stroke="var(--accent)" strokeWidth="2"/>
-          <text x="190" y="140" textAnchor="middle" fill="var(--accent)" fontSize="13" fontWeight="700" fontFamily="IBM Plex Sans,sans-serif">POT</text>
-          {/* Lock tag */}
-          <rect x="158" y="146" width="64" height="26" rx="6" fill="white" stroke="var(--line)" strokeWidth="1"/>
-          <text x="190" y="158" textAnchor="middle" fill="var(--ink-2)" fontSize="10" fontFamily="IBM Plex Sans,sans-serif">School fees</text>
-          <text x="190" y="168" textAnchor="middle" fill="var(--muted)" fontSize="9" fontFamily="IBM Plex Sans,sans-serif">Term 1 · 500 USDC</text>
+          <text x={pc.x} y={PY+20} textAnchor="middle"
+            fill="var(--accent)" fontSize="13" fontWeight="700" fontFamily="IBM Plex Sans,sans-serif">
+            POT
+          </text>
+          {/* Lock tag — inset 7px each side, 30px tall */}
+          <rect x={PX+7} y={PY+26} width={PW-14} height={30} rx="6"
+            fill="white" stroke="var(--line)" strokeWidth="1"/>
+          <text x={pc.x} y={PY+40} textAnchor="middle"
+            fill="var(--ink-2)" fontSize="9.5" fontFamily="IBM Plex Sans,sans-serif">
+            School fees
+          </text>
+          <text x={pc.x} y={PY+52} textAnchor="middle"
+            fill="var(--muted)" fontSize="8.5" fontFamily="IBM Plex Sans,sans-serif">
+            Term 1 · 500 USDC
+          </text>
 
-          {/* ── Arrow pot→Greenfield ── */}
-          <line x1="230" y1="138" x2="272" y2="100" stroke="var(--line)" strokeWidth="1.5" strokeDasharray="4 3"/>
-          <polygon points="269,95 278,98 274,107" fill="var(--success)" opacity="0.7"/>
+          {/* ── Arrow pot → Greenfield ─────────────────────────────────────── */}
+          <line
+            x1={PX+PW} y1={pc.y-10}
+            x2={NX-6}  y2={gc.y}
+            stroke="var(--line)" strokeWidth="1.5" strokeDasharray="4 3"/>
+          <polygon
+            points={`${NX-6},${gc.y-5} ${NX},${gc.y} ${NX-6},${gc.y+5}`}
+            fill="var(--success)" opacity="0.7"/>
 
-          {/* ── Arrow pot→City Clinic ── */}
-          <line x1="230" y1="166" x2="272" y2="180" stroke="var(--line)" strokeWidth="1.5" strokeDasharray="4 3"/>
-          <polygon points="269,176 278,181 274,190" fill="var(--success)" opacity="0.7"/>
+          {/* ── Arrow pot → City Clinic ────────────────────────────────────── */}
+          <line
+            x1={PX+PW} y1={pc.y+10}
+            x2={NX-6}  y2={kc.y}
+            stroke="var(--line)" strokeWidth="1.5" strokeDasharray="4 3"/>
+          <polygon
+            points={`${NX-6},${kc.y-5} ${NX},${kc.y} ${NX-6},${kc.y+5}`}
+            fill="var(--success)" opacity="0.7"/>
 
-          {/* ── Greenfield School ── */}
-          <rect x="280" y="72" width="76" height="44" rx="10"
+          {/* ── Greenfield School ──────────────────────────────────────────── */}
+          <rect x={NX} y={GY} width={NW} height={NH} rx="10"
             fill="#E6FFF4" stroke="var(--success)" strokeWidth="1.5"/>
-          <text x="318" y="89" textAnchor="middle" fill="var(--success)" fontSize="11" fontWeight="700" fontFamily="IBM Plex Sans,sans-serif">Greenfield</text>
-          <text x="318" y="104" textAnchor="middle" fill="var(--success)" fontSize="11" fontFamily="IBM Plex Sans,sans-serif">School ✓</text>
+          <text x={gc.x} y={GY+17} textAnchor="middle"
+            fill="var(--success)" fontSize="11" fontWeight="700" fontFamily="IBM Plex Sans,sans-serif">
+            Greenfield
+          </text>
+          <text x={gc.x} y={GY+31} textAnchor="middle"
+            fill="var(--success)" fontSize="11" fontFamily="IBM Plex Sans,sans-serif">
+            School ✓
+          </text>
 
-          {/* ── Receipt chip — appears below Greenfield when done-ok ── */}
+          {/* ── Receipt chip — sits below Greenfield, above City Clinic ─────── */}
           {showReceipt && (
             <g style={{ animation: reduced ? 'none' : 'fadeInUp 0.3s ease' }}>
-              <rect x="272" y="122" width="92" height="22" rx="11"
+              <rect x={RX} y={RY} width={RW} height={RH} rx="12"
                 fill="var(--success)" opacity="0.95"/>
-              <text x="318" y="136" textAnchor="middle" fill="white" fontSize="10" fontWeight="600" fontFamily="IBM Plex Sans,sans-serif">✓ Receipt on Arc</text>
+              <text x={RX + RW/2} y={RY+16} textAnchor="middle"
+                fill="white" fontSize="10" fontWeight="600" fontFamily="IBM Plex Sans,sans-serif">
+                ✓ Receipt recorded on Arc
+              </text>
             </g>
           )}
 
-          {/* ── City Clinic ── */}
-          <rect x="280" y="164" width="76" height="44" rx="10"
+          {/* ── City Clinic ────────────────────────────────────────────────── */}
+          <rect x={NX} y={KY} width={NW} height={NH} rx="10"
             fill="#E6FFF4" stroke="var(--success)" strokeWidth="1.5"/>
-          <text x="318" y="181" textAnchor="middle" fill="var(--success)" fontSize="11" fontWeight="700" fontFamily="IBM Plex Sans,sans-serif">City Clinic</text>
-          <text x="318" y="196" textAnchor="middle" fill="var(--success)" fontSize="11" fontFamily="IBM Plex Sans,sans-serif">✓</text>
+          <text x={kc.x} y={KY+17} textAnchor="middle"
+            fill="var(--success)" fontSize="11" fontWeight="700" fontFamily="IBM Plex Sans,sans-serif">
+            City Clinic
+          </text>
+          <text x={kc.x} y={KY+31} textAnchor="middle"
+            fill="var(--success)" fontSize="11" fontFamily="IBM Plex Sans,sans-serif">
+            ✓
+          </text>
 
-          {/* ── Arrow pot→blocked (dashed red) ── */}
-          <line x1="190" y1="182" x2="190" y2="242" stroke="var(--danger)" strokeWidth="1.5" strokeDasharray="4 3" opacity="0.4"/>
-          <polygon points="184,242 190,252 196,242" fill="var(--danger)" opacity="0.4"/>
+          {/* ── Arrow pot → blocked (dashed red) ──────────────────────────── */}
+          <line x1={pc.x} y1={PY+PH} x2={bc.x} y2={BY-6}
+            stroke="var(--danger)" strokeWidth="1.5" strokeDasharray="4 3" opacity="0.4"/>
+          <polygon
+            points={`${bc.x-6},${BY-6} ${bc.x},${BY} ${bc.x+6},${BY-6}`}
+            fill="var(--danger)" opacity="0.4"/>
 
-          {/* ── Blocked: any other wallet ── */}
-          <rect x="130" y="252" width="120" height="40" rx="10"
+          {/* ── Blocked: any other wallet ──────────────────────────────────── */}
+          <rect x={BX} y={BY} width={BW} height={BH} rx="10"
             fill="#FDECEC" stroke="var(--danger)" strokeWidth="1.5" opacity="0.7"/>
-          <text x="190" y="268" textAnchor="middle" fill="var(--danger)" fontSize="12" fontWeight="600" fontFamily="IBM Plex Sans,sans-serif">Any other wallet</text>
-          <text x="190" y="283" textAnchor="middle" fill="var(--danger)" fontSize="12" fontFamily="IBM Plex Sans,sans-serif">✕</text>
+          <text x={bc.x} y={BY+17} textAnchor="middle"
+            fill="var(--danger)" fontSize="11" fontWeight="600" fontFamily="IBM Plex Sans,sans-serif">
+            Any other wallet
+          </text>
+          <text x={bc.x} y={BY+31} textAnchor="middle"
+            fill="var(--danger)" fontSize="11" fontFamily="IBM Plex Sans,sans-serif">
+            ✕
+          </text>
 
-          {/* ── Barrier on blocked path ── */}
+          {/* ── Barrier on blocked path ───────────────────────────────────── */}
           {showBlock && (
-            <line x1="176" y1="230" x2="204" y2="230" stroke="var(--danger)" strokeWidth="4" strokeLinecap="round"/>
+            <line
+              x1={bc.x-14} y1={BY-20}
+              x2={bc.x+14} y2={BY-20}
+              stroke="var(--danger)" strokeWidth="4" strokeLinecap="round"/>
           )}
 
-          {/* ── Animated USDC dot ── */}
+          {/* ── Animated USDC dot ─────────────────────────────────────────── */}
           {showDot && dot && (
             <circle
               cx={dot.x}
@@ -229,7 +320,7 @@ function FlowDiagram() {
           )}
         </svg>
 
-        {/* Blocked message — below SVG so it doesn't crowd the diagram */}
+        {/* Blocked message — below SVG */}
         {showBlock && (
           <div
             className="mx-4 mb-3 rounded-lg bg-[#FDECEC] border border-[var(--danger)] px-3 py-2 text-xs text-[var(--danger)] font-medium leading-snug"
