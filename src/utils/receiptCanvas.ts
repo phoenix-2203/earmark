@@ -1,117 +1,59 @@
 /**
  * receiptCanvas.ts
  *
- * Draws a 1080 × 1350 px Earmark payment receipt PNG using Canvas 2D.
- * No DOM screenshots. Waits for fonts before drawing.
+ * Two-pass layout:
+ *   Pass 1 (measure): walk the full layout without drawing; track y to get
+ *                     total content height.
+ *   Pass 2 (draw):    set canvas.height = max(1350, contentHeight + margins),
+ *                     then walk the same path with drawing enabled.
  *
- * Layout contract
- * ───────────────
- * Every text element is placed with an EXPLICIT y baseline computed as:
- *   y_next = y_prev + fontSize + gap
- * "gap" is always ≥ 16 px. Nothing uses a relative +20 or +44 that could
- * silently overlap the next element when the font size changes.
+ * Nothing is ever drawn outside the canvas.
+ * Mono values (addresses, hashes) wrap by character so long tokens don't overflow.
  */
 
 import QRCode from 'qrcode'
 import { EARMARK_CHAIN } from '@/earmarkConfig'
 import { CATEGORY_NAMES } from '@/earmarkTypes'
 
-// ─── Design tokens (mirrored from index.css) ────────────────────────────────
+// ─── Design tokens ────────────────────────────────────────────────────────────
 const T = {
-  bg:         '#F5F6F8',
-  surface:    '#FFFFFF',
-  line:       '#DCE1E6',
-  ink:        '#0F2233',
-  ink2:       '#3C4B5A',
-  muted:      '#5B6775',
-  accent:     '#0F6B5C',
-  accentSoft: '#E3F1EE',
+  bg:      '#F5F6F8',
+  surface: '#FFFFFF',
+  line:    '#DCE1E6',
+  ink:     '#0F2233',
+  ink2:    '#3C4B5A',
+  muted:   '#5B6775',
+  accent:  '#0F6B5C',
 }
 
-const W   = 1080   // canvas width
-const H   = 1350   // canvas height
-const ML  = 80     // margin left/right (symmetric)
-const CW  = W - ML * 2   // content width = 920
+const W   = 1080
+const ML  = 80          // margin left/right
+const CW  = W - ML * 2  // 920 px content width
 
-// Font stacks — never fall back to a serif
 const SANS = '"IBM Plex Sans", system-ui, -apple-system, "Segoe UI", Arial, sans-serif'
 const MONO = '"IBM Plex Mono", ui-monospace, Menlo, "Courier New", monospace'
 
-// ─── Font-load helper ────────────────────────────────────────────────────────
+// ─── Font loading ─────────────────────────────────────────────────────────────
 async function loadFonts() {
   await document.fonts.ready
-  // Explicitly request the exact variants we use so the browser actually loads them
   await Promise.allSettled([
     document.fonts.load(`700 36px ${SANS}`),
     document.fonts.load(`600 28px ${SANS}`),
+    document.fonts.load(`600 22px ${SANS}`),
     document.fonts.load(`500 32px ${SANS}`),
     document.fonts.load(`400 24px ${SANS}`),
-    document.fonts.load(`italic 400 28px ${SANS}`),
+    document.fonts.load(`400 22px ${SANS}`),
+    document.fonts.load(`400 20px ${SANS}`),
+    document.fonts.load(`italic 400 26px ${SANS}`),
     document.fonts.load(`700 88px ${MONO}`),
-    document.fonts.load(`400 26px ${MONO}`),
+    document.fonts.load(`400 27px ${MONO}`),
+    document.fonts.load(`400 24px ${MONO}`),
+    document.fonts.load(`400 20px ${MONO}`),
   ])
 }
 
-// ─── Wrap left-aligned text, returning the y AFTER the last line ─────────────
-// ctx.textAlign must be 'left' when calling this.
-function wrapLeft(
-  ctx: CanvasRenderingContext2D,
-  text: string,
-  x: number,
-  y: number,       // y of the FIRST baseline
-  maxWidth: number,
-  lineHeight: number,  // distance between baselines
-): number {
-  const words = text.split(' ')
-  let line = ''
-  for (const word of words) {
-    const test = line ? `${line} ${word}` : word
-    if (ctx.measureText(test).width > maxWidth && line) {
-      ctx.fillText(line, x, y)
-      y += lineHeight
-      line = word
-    } else {
-      line = test
-    }
-  }
-  if (line) { ctx.fillText(line, x, y); y += lineHeight }
-  return y
-}
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
-// ─── Wrap centered text, returning the y AFTER the last line ─────────────────
-// Measures each word individually to split lines, then centers each line.
-function wrapCenter(
-  ctx: CanvasRenderingContext2D,
-  text: string,
-  y: number,       // y of the FIRST baseline
-  maxWidth: number,
-  lineHeight: number,
-): number {
-  const savedAlign = ctx.textAlign
-  ctx.textAlign = 'left'
-  const words = text.split(' ')
-  let line = ''
-  const lines: string[] = []
-  for (const word of words) {
-    const test = line ? `${line} ${word}` : word
-    if (ctx.measureText(test).width > maxWidth && line) {
-      lines.push(line)
-      line = word
-    } else {
-      line = test
-    }
-  }
-  if (line) lines.push(line)
-  ctx.textAlign = 'center'
-  for (const l of lines) {
-    ctx.fillText(l, W / 2, y)
-    y += lineHeight
-  }
-  ctx.textAlign = savedAlign
-  return y
-}
-
-// ─── Round-rect helper ───────────────────────────────────────────────────────
 function roundRect(
   ctx: CanvasRenderingContext2D,
   x: number, y: number, w: number, h: number, r: number,
@@ -129,46 +71,319 @@ function roundRect(
   ctx.closePath()
 }
 
-// ─── Divider (returns y after the gap) ──────────────────────────────────────
-function drawDivider(ctx: CanvasRenderingContext2D, y: number): number {
-  ctx.strokeStyle = T.line
-  ctx.lineWidth = 1.5
-  ctx.beginPath()
-  ctx.moveTo(ML, y); ctx.lineTo(W - ML, y)
-  ctx.stroke()
-  return y + 32
+/** Split text into lines that fit maxWidth using word-wrap. */
+function wordWrapLines(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  maxWidth: number,
+): string[] {
+  const words = text.split(' ')
+  const lines: string[] = []
+  let line = ''
+  for (const word of words) {
+    const test = line ? `${line} ${word}` : word
+    if (ctx.measureText(test).width > maxWidth && line) {
+      lines.push(line)
+      line = word
+    } else {
+      line = test
+    }
+  }
+  if (line) lines.push(line)
+  return lines
 }
 
-// ─── Detail row: LABEL above VALUE, left-aligned ─────────────────────────────
-// Returns y after the bottom of the value text + gap.
-function drawRow(
+/**
+ * Split text by character so long unspaced tokens (addresses, hashes) wrap.
+ * Uses word-wrap first; any word that still exceeds maxWidth gets char-split.
+ */
+function monoWrapLines(
   ctx: CanvasRenderingContext2D,
-  label: string,
-  value: string,
-  y: number,
-  mono = false,
-): number {
-  const LABEL_SIZE = 22
-  const VALUE_SIZE = mono ? 24 : 27
-  const LINE_H     = mono ? 34 : 38   // line height for wrapped value
+  text: string,
+  maxWidth: number,
+): string[] {
+  const words = text.split(' ')
+  const lines: string[] = []
+  let line = ''
 
-  ctx.textAlign    = 'left'
-  ctx.letterSpacing = '1.5px'
-  ctx.font         = `600 ${LABEL_SIZE}px ${SANS}`
-  ctx.fillStyle    = T.muted
-  ctx.fillText(label.toUpperCase(), ML, y)
-  y += LABEL_SIZE + 10   // gap between label baseline and value baseline
+  for (const word of words) {
+    // Does this word alone exceed maxWidth? Char-split it.
+    if (ctx.measureText(word).width > maxWidth) {
+      // Flush current line first
+      if (line) { lines.push(line); line = '' }
+      // Character-split the long word
+      let chunk = ''
+      for (const ch of word) {
+        if (ctx.measureText(chunk + ch).width > maxWidth) {
+          if (chunk) lines.push(chunk)
+          chunk = ch
+        } else {
+          chunk += ch
+        }
+      }
+      if (chunk) { line = chunk }
+    } else {
+      const test = line ? `${line} ${word}` : word
+      if (ctx.measureText(test).width > maxWidth && line) {
+        lines.push(line)
+        line = word
+      } else {
+        line = test
+      }
+    }
+  }
+  if (line) lines.push(line)
+  return lines
+}
+
+// ─── Layout engine ────────────────────────────────────────────────────────────
+// The engine is a single function that accepts a `draw` flag.
+// When draw=false it measures; when draw=true it renders.
+// Both passes MUST follow the exact same code path so heights match.
+
+function layoutEngine(
+  ctx: CanvasRenderingContext2D,
+  data: ReceiptData,
+  canvasHeight: number,
+  draw: boolean,
+): number {
+  const CARD_X = 40
+  const CARD_Y = 56
+  const CARD_W = W - 80
+
+  if (draw) {
+    // Background
+    ctx.fillStyle = T.bg
+    ctx.fillRect(0, 0, W, canvasHeight)
+
+    // Card shadow + fill
+    ctx.shadowColor   = 'rgba(15,34,51,0.10)'
+    ctx.shadowBlur    = 40
+    ctx.shadowOffsetY = 6
+    ctx.fillStyle = T.surface
+    const CARD_H = canvasHeight - 112
+    roundRect(ctx, CARD_X, CARD_Y, CARD_W, CARD_H, 24)
+    ctx.fill()
+    ctx.shadowColor = 'transparent'; ctx.shadowBlur = 0; ctx.shadowOffsetY = 0
+
+    // Accent bar
+    ctx.fillStyle = T.accent
+    roundRect(ctx, CARD_X, CARD_Y, CARD_W, 10, 5)
+    ctx.fill()
+  }
+
+  // ── Helper: set font + optional draw ───────────────────────────────────────
+  const font = (f: string, size: number, style = '') => {
+    ctx.letterSpacing = '0px'
+    ctx.font = `${style}${f === MONO ? '400' : '400'} ${size}px ${f}`
+  }
+
+  // ── y cursor starts at card top + accent bar + padding ─────────────────────
+  let y = CARD_Y + 72   // 56 card top + 10 accent + 6 internal pad + 0 → 72
+
+  // ── SECTION 1: Header ──────────────────────────────────────────────────────
+
+  // Wordmark
+  ctx.letterSpacing = '-0.5px'
+  ctx.font = `700 36px ${SANS}`
+  if (draw) {
+    ctx.textAlign = 'center'
+    ctx.fillStyle = T.accent
+    ctx.fillText('Earmark', W / 2, y)
+  }
+  y += 36 + 18
+
+  // Tagline
+  ctx.letterSpacing = '0px'
+  ctx.font = `400 22px ${SANS}`
+  if (draw) {
+    ctx.textAlign = 'center'
+    ctx.fillStyle = T.muted
+    ctx.fillText('Purpose-bound payments on Arc', W / 2, y)
+  }
+  y += 22 + 28
+
+  // PAYMENT RECEIPT
+  ctx.letterSpacing = '3px'
+  ctx.font = `600 26px ${SANS}`
+  if (draw) {
+    ctx.textAlign = 'center'
+    ctx.fillStyle = T.muted
+    ctx.fillText('PAYMENT RECEIPT', W / 2, y)
+  }
+  y += 26 + 44
+
+  // ── SECTION 2: Amount block (no divider above it) ─────────────────────────
+
+  // Amount
+  ctx.letterSpacing = '-2px'
+  ctx.font = `700 88px ${MONO}`
+  if (draw) {
+    ctx.textAlign = 'center'
+    ctx.fillStyle = T.ink
+    ctx.fillText(data.amount, W / 2, y)
+  }
+  y += 88 + 10
+
+  // USDC label
+  ctx.letterSpacing = '3px'
+  ctx.font = `500 30px ${SANS}`
+  if (draw) {
+    ctx.textAlign = 'center'
+    ctx.fillStyle = T.muted
+    ctx.fillText('USDC', W / 2, y)
+  }
+  y += 30 + 36
+
+  // Memo — centered, word-wrapped
+  if (data.memo) {
+    ctx.letterSpacing = '0px'
+    ctx.font = `italic 400 26px ${SANS}`
+    const memoText = `"${data.memo}"`
+    const memoLines = wordWrapLines(ctx, memoText, CW - 64)
+    const memoLH = 36
+    if (draw) {
+      ctx.textAlign = 'center'
+      ctx.fillStyle = T.ink2
+      for (const line of memoLines) {
+        ctx.fillText(line, W / 2, y)
+        y += memoLH
+      }
+    } else {
+      y += memoLines.length * memoLH
+    }
+    y += 24
+  }
+
+  // ── Divider between header block and detail rows ───────────────────────────
+  if (draw) {
+    ctx.strokeStyle = T.line
+    ctx.lineWidth = 1.5
+    ctx.beginPath()
+    ctx.moveTo(ML, y); ctx.lineTo(W - ML, y)
+    ctx.stroke()
+  }
+  y += 36
+
+  // ── SECTION 3: Detail rows ─────────────────────────────────────────────────
+  // Each row: LABEL (caps, small) + VALUE (normal or mono, wrapped)
+  const LABEL_FS = 20
+  const SANS_FS  = 26
+  const MONO_FS  = 24
+  const MONO_LH  = 34
+  const SANS_LH  = 36
+
+  const drawRow = (label: string, value: string, mono = false): void => {
+    const valueFS = mono ? MONO_FS : SANS_FS
+    const lineLH  = mono ? MONO_LH : SANS_LH
+    const valueFont = mono ? MONO : SANS
+
+    // Label
+    ctx.letterSpacing = '1.5px'
+    ctx.font = `600 ${LABEL_FS}px ${SANS}`
+    if (draw) {
+      ctx.textAlign = 'left'
+      ctx.fillStyle = T.muted
+      ctx.fillText(label.toUpperCase(), ML, y)
+    }
+    y += LABEL_FS + 8
+
+    // Value — use mono char-wrap for mono, word-wrap for sans
+    ctx.letterSpacing = '0px'
+    ctx.font = `400 ${valueFS}px ${valueFont}`
+    const lines = mono
+      ? monoWrapLines(ctx, value, CW)
+      : wordWrapLines(ctx, value, CW)
+    if (draw) {
+      ctx.textAlign = 'left'
+      ctx.fillStyle = T.ink
+      for (const line of lines) {
+        ctx.fillText(line, ML, y)
+        y += lineLH
+      }
+    } else {
+      y += lines.length * lineLH
+    }
+    y += 22  // gap after row
+  }
+
+  font(SANS, SANS_FS)
+  drawRow('Purpose', data.purpose)
+  drawRow('Category', CATEGORY_NAMES[data.category] ?? 'Other')
+
+  const payeeDisplay = data.payeeLabel && data.payeeLabel !== data.payeeAddress
+    ? `${data.payeeLabel}  ${data.payeeAddress}`
+    : data.payeeAddress
+  drawRow('Paid to', payeeDisplay, true)
+  drawRow('Paid by', data.payerAddress, true)
+  drawRow('Date and time', data.dateTime)
+  drawRow('Pot', `#${data.potId}`)
+  drawRow('Network', EARMARK_CHAIN.name)
+
+  if (data.txHash) {
+    drawRow('Transaction', data.txHash, true)
+  }
+
+  // Divider before QR
+  if (draw) {
+    ctx.strokeStyle = T.line
+    ctx.lineWidth = 1.5
+    ctx.beginPath()
+    ctx.moveTo(ML, y); ctx.lineTo(W - ML, y)
+    ctx.stroke()
+  }
+  y += 36
+
+  // ── SECTION 4: QR code ─────────────────────────────────────────────────────
+  // The QR is drawn async during pass 2; in pass 1 we just advance y.
+  // We tag a placeholder so we know the y position when drawing.
+  const QR_SIZE = 220
+  const QR_Y    = y      // remember for pass-2 draw
+  y += QR_SIZE + 16
+
+  // QR caption
+  ctx.letterSpacing = '0px'
+  ctx.font = `400 22px ${SANS}`
+  if (draw) {
+    ctx.textAlign = 'center'
+    ctx.fillStyle = T.muted
+    ctx.fillText('Scan to verify on Earmark', W / 2, y)
+  }
+  y += 22 + 36
+
+  // ── SECTION 5: Footer ──────────────────────────────────────────────────────
+  if (draw) {
+    ctx.strokeStyle = T.line
+    ctx.lineWidth = 1.5
+    ctx.beginPath()
+    ctx.moveTo(ML, y); ctx.lineTo(W - ML, y)
+    ctx.stroke()
+  }
+  y += 28
 
   ctx.letterSpacing = '0px'
-  ctx.font         = `400 ${VALUE_SIZE}px ${mono ? MONO : SANS}`
-  ctx.fillStyle    = T.ink
-  y = wrapLeft(ctx, value, ML, y, CW, LINE_H)
-  return y + 20   // gap after this row
+  ctx.font = `400 20px ${SANS}`
+  if (draw) {
+    ctx.textAlign = 'center'
+    ctx.fillStyle = T.muted
+    ctx.fillText('Recorded on Arc · Earmark · Not audited, use small amounts', W / 2, y)
+  }
+  y += 20 + 56  // font + bottom card padding
+
+  // Store QR_Y in a side-channel so the draw pass can use it.
+  // We can't return two values from layoutEngine so we use a simple trick:
+  // stash it on the canvas element as a data attribute (only the draw pass reads it).
+  if (!draw) {
+    // pass 1: tag the canvas with the QR y position
+    ;(ctx.canvas as HTMLCanvasElement & { _qrY?: number })._qrY = QR_Y
+  }
+
+  return y
 }
 
 // ─── Public data interface ────────────────────────────────────────────────────
 export interface ReceiptData {
-  amount:       string          // formatted, e.g. "150.00"
+  amount:       string
   memo:         string
   purpose:      string
   category:     number
@@ -185,182 +400,60 @@ export interface ReceiptData {
 export async function drawReceiptCanvas(data: ReceiptData): Promise<HTMLCanvasElement> {
   await loadFonts()
 
+  // ── Pass 1: measure ────────────────────────────────────────────────────────
+  const measureCanvas = document.createElement('canvas')
+  measureCanvas.width  = W
+  measureCanvas.height = 2000   // generous scratch height for measurement
+  const mCtx = measureCanvas.getContext('2d')!
+  mCtx.textBaseline = 'alphabetic'
+  mCtx.textAlign    = 'left'
+  mCtx.letterSpacing = '0px'
+
+  const contentBottom = layoutEngine(mCtx, data, 2000, false)
+  const canvasH = Math.max(1350, contentBottom + 56)  // 56 = bottom bg margin
+
+  // ── Pass 2: draw ───────────────────────────────────────────────────────────
   const canvas = document.createElement('canvas')
   canvas.width  = W
-  canvas.height = H
+  canvas.height = canvasH
   const ctx = canvas.getContext('2d')!
-
-  // Default state
   ctx.textBaseline = 'alphabetic'
   ctx.textAlign    = 'left'
   ctx.letterSpacing = '0px'
 
-  // ── Background ──────────────────────────────────────────────────────────
-  ctx.fillStyle = T.bg
-  ctx.fillRect(0, 0, W, H)
+  layoutEngine(ctx, data, canvasH, true)
 
-  // ── White card ──────────────────────────────────────────────────────────
-  const CARD_X = 40
-  const CARD_Y = 56
-  const CARD_W = W - 80
-  const CARD_H = H - 112
-  ctx.shadowColor   = 'rgba(15,34,51,0.10)'
-  ctx.shadowBlur    = 40
-  ctx.shadowOffsetY = 6
-  ctx.fillStyle = T.surface
-  roundRect(ctx, CARD_X, CARD_Y, CARD_W, CARD_H, 24)
-  ctx.fill()
-  // Reset shadow before all text
-  ctx.shadowColor = 'transparent'; ctx.shadowBlur = 0; ctx.shadowOffsetY = 0
-
-  // ── Accent bar ──────────────────────────────────────────────────────────
-  ctx.fillStyle = T.accent
-  roundRect(ctx, CARD_X, CARD_Y, CARD_W, 10, 5)
-  ctx.fill()
-
-  // ── HEADER BLOCK — each element owns its own fontSize + gap ─────────────
-  //
-  // Rule: after drawing a text element at baseline y,
-  //   advance: y += fontSize + gap_to_next
-  //
-  //  Element               fontSize  gap_after
-  //  ─────────────────────────────────────────
-  //  Wordmark "Earmark"      36        20
-  //  Tagline                 24        36
-  //  "PAYMENT RECEIPT"       28        36
-  //  Divider line                      32 (inside drawDivider)
-  //  Amount (big number)     88        16
-  //  "USDC"                  32        28
-  //  Memo (if present)       26        24
-  //  Divider into rows               (32)
-  //
-  // Total header: 56(card top pad) + 36+20 + 24+36 + 28+36 + 32(div)
-  //             = 56 + 56 + 60 + 64 + 32 = 268  (before amount)
-  //
-  // Amount baseline:  268
-  // "USDC" baseline:  268 + 88 + 16 = 372
-  // Memo (if any):    372 + 32 + 28 = 432
-
-  let y = CARD_Y + 64   // 56 card-top + 8 accent bar height + padding
-
-  // Wordmark
-  ctx.textAlign    = 'center'
-  ctx.letterSpacing = '-0.5px'
-  ctx.font         = `700 36px ${SANS}`
-  ctx.fillStyle    = T.accent
-  ctx.fillText('Earmark', W / 2, y)
-  y += 36 + 20   // fontSize + gap → y = CARD_Y+64 + 56
-
-  // Tagline
-  ctx.letterSpacing = '0px'
-  ctx.font         = `400 24px ${SANS}`
-  ctx.fillStyle    = T.muted
-  ctx.fillText('Purpose-bound payments on Arc', W / 2, y)
-  y += 24 + 36   // → +60
-
-  // "PAYMENT RECEIPT" label
-  ctx.letterSpacing = '3px'
-  ctx.font         = `600 28px ${SANS}`
-  ctx.fillStyle    = T.muted
-  ctx.fillText('PAYMENT RECEIPT', W / 2, y)
-  y += 28 + 40   // → +68
-
-  // Divider between header and amount
-  y = drawDivider(ctx, y)   // +32 inside
-
-  // Amount (large monospace number)
-  ctx.letterSpacing = '-2px'
-  ctx.font         = `700 88px ${MONO}`
-  ctx.fillStyle    = T.ink
-  ctx.fillText(data.amount, W / 2, y)
-  y += 88 + 16   // fontSize + gap
-
-  // "USDC"
-  ctx.letterSpacing = '3px'
-  ctx.font         = `500 32px ${SANS}`
-  ctx.fillStyle    = T.muted
-  ctx.fillText('USDC', W / 2, y)
-  y += 32 + 32   // → enough room before memo
-
-  // Memo (if present) — centered, wrapped
-  if (data.memo) {
-    ctx.letterSpacing = '0px'
-    ctx.font         = `italic 400 26px ${SANS}`
-    ctx.fillStyle    = T.ink2
-    y = wrapCenter(ctx, `"${data.memo}"`, y, CW - 64, 36)
-    y += 24   // gap after memo
-  }
-
-  // Divider into detail rows
-  ctx.textAlign = 'left'
-  y = drawDivider(ctx, y)
-
-  // ── Detail rows ──────────────────────────────────────────────────────────
-  y = drawRow(ctx, 'Purpose', data.purpose, y)
-  y = drawRow(ctx, 'Category', CATEGORY_NAMES[data.category] ?? 'Other', y)
-
-  // Paid to: "Label  fullAddress" or just fullAddress
-  const payeeDisplay = data.payeeLabel && data.payeeLabel !== data.payeeAddress
-    ? `${data.payeeLabel}  ${data.payeeAddress}`
-    : data.payeeAddress
-  y = drawRow(ctx, 'Paid to', payeeDisplay, y, /* mono */ true)
-
-  y = drawRow(ctx, 'Paid by', data.payerAddress, y, true)
-  y = drawRow(ctx, 'Date and time', data.dateTime, y)
-  y = drawRow(ctx, 'Pot', `#${data.potId}`, y)
-  y = drawRow(ctx, 'Network', EARMARK_CHAIN.name, y)
-
-  if (data.txHash) {
-    y = drawRow(ctx, 'Transaction', data.txHash, y, true)
-  }
-
-  y = drawDivider(ctx, y)
-
-  // ── QR code (220 px) ─────────────────────────────────────────────────────
+  // ── Draw QR code at the position measured in pass 1 ───────────────────────
+  // (layoutEngine is synchronous; QR is async so we draw it after)
+  const qrY = (measureCanvas as HTMLCanvasElement & { _qrY?: number })._qrY ?? 0
   const QR_SIZE = 220
+
   try {
     const qrCanvas = document.createElement('canvas')
     await QRCode.toCanvas(qrCanvas, data.receiptUrl, {
       width: QR_SIZE,
       margin: 1,
-      color: { dark: T.ink, light: T.surface },
+      color: { dark: '#0F2233', light: '#FFFFFF' },
     })
-    const qrX = (W - QR_SIZE) / 2
-    ctx.drawImage(qrCanvas, qrX, y)
-    y += QR_SIZE + 16
-
-    ctx.textAlign    = 'center'
-    ctx.letterSpacing = '0px'
-    ctx.font         = `400 22px ${SANS}`
-    ctx.fillStyle    = T.muted
-    ctx.fillText('Scan to verify on Earmark', W / 2, y)
-    y += 22 + 28
+    ctx.drawImage(qrCanvas, (W - QR_SIZE) / 2, qrY)
   } catch {
-    // QR generation failed — fall back to URL text
-    ctx.textAlign    = 'center'
+    // QR failed — draw URL text instead
     ctx.letterSpacing = '0px'
-    ctx.font         = `600 22px ${SANS}`
-    ctx.fillStyle    = T.accent
-    ctx.fillText('Verify this receipt at:', W / 2, y)
-    y += 22 + 12
-    ctx.font      = `400 20px ${MONO}`
+    ctx.font = `400 18px ${MONO}`
+    ctx.textAlign = 'center'
     ctx.fillStyle = T.ink2
-    y = wrapCenter(ctx, data.receiptUrl, y, CW - 32, 28)
-    y += 20
+    const urlLines = wordWrapLines(ctx, data.receiptUrl, CW - 32)
+    let uy = qrY + 24
+    for (const line of urlLines) {
+      ctx.fillText(line, W / 2, uy)
+      uy += 26
+    }
   }
-
-  // ── Footer ───────────────────────────────────────────────────────────────
-  y = drawDivider(ctx, y)
-  ctx.textAlign    = 'center'
-  ctx.letterSpacing = '0px'
-  ctx.font         = `400 20px ${SANS}`
-  ctx.fillStyle    = T.muted
-  ctx.fillText('Recorded on Arc · Earmark · Not audited, use small amounts', W / 2, y)
 
   return canvas
 }
 
-// ─── Public helpers ──────────────────────────────────────────────────────────
+// ─── Public helpers ───────────────────────────────────────────────────────────
 
 export async function downloadReceiptPng(data: ReceiptData, filename: string): Promise<void> {
   const canvas = await drawReceiptCanvas(data)
