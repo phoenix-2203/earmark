@@ -13,11 +13,12 @@ interface Props {
 }
 
 const NAV_LINKS = [
-  { label: 'How it works',  href: '#how'        },
-  { label: 'Use cases',     href: '#use-cases'  },
-  { label: 'Live on Arc',   href: '#live'       },
-  { label: 'Safety',        href: '#safety'     },
-  { label: 'FAQ',           href: '#faq'        },
+  { label: 'In 30 seconds', href: '#in-30-seconds' },
+  { label: 'How it works',  href: '#how'            },
+  { label: 'Use cases',     href: '#use-cases'      },
+  { label: 'Live on Arc',   href: '#live'           },
+  { label: 'Safety',        href: '#safety'         },
+  { label: 'FAQ',           href: '#faq'            },
 ]
 
 function scrollTo(id: string) {
