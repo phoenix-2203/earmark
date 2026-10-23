@@ -44,6 +44,7 @@ import {
 import type { Pot, PayeeEntry } from '@/earmarkTypes'
 import type { Status } from '@/components/ui/StatusBadge'
 import PayeeBadge from '@/components/PayeeBadge'
+import AskPayeeToConfirmButton from '@/components/AskPayeeToConfirmButton'
 import { parseLabel, encodeLabel, encodedByteLength } from '@/lib/payeeLabel'
 import { normaliseDomain } from '@/lib/verifyPayee'
 
@@ -287,7 +288,7 @@ export default function PotPage({ potId, onBack, onReceipt }: Props) {
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-semibold text-[var(--ink)]">{parsed.name}</p>
                       <AddressChip address={p.address} />
-                      <PayeeBadge domain={parsed.domain} address={p.address} className="mt-0.5" />
+                      <PayeeBadge domain={parsed.domain} address={p.address} funder={connectedAddress ?? undefined} className="mt-0.5" />
                     </div>
                     <a
                       href={`${EARMARK_CHAIN.explorerBase}/address/${p.address}`}
@@ -409,6 +410,7 @@ function SenderPanel({ pot, potId, payees, requests, pendingCount, onRefetchPaye
                     potId={potId}
                     req={req}
                     requestId={BigInt(i)}
+                    potTitle={pot.title}
                     onResolved={() => { onRefetchRequests(); onRefetchPayees() }}
                   />
                 ) : null
@@ -621,6 +623,7 @@ function TopUpForm({ potId, onDone }: { potId: bigint; onDone: () => void }) {
 
 // ── AddPayeeForm ──────────────────────────────────────────────────────────────
 function AddPayeeForm({ potId, pot, payees, onDone }: { potId: bigint; pot: Pot; payees: PayeeEntry[]; onDone: () => void }) {
+  const { address: funderAddress } = useAccount()
   const [rawAddr, setRawAddr] = useState('')
   const [checksumAddr, setChecksumAddr] = useState<`0x${string}` | null>(null)
   const [label, setLabel] = useState('')
@@ -683,8 +686,14 @@ function AddPayeeForm({ potId, pot, payees, onDone }: { potId: bigint; pot: Pot;
           className="w-full rounded-input border border-[var(--line)] bg-[var(--surface-2)] px-3 py-2 text-sm text-[var(--ink)] placeholder:text-[var(--muted)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)]"
         />
         {checksumAddr && (
-          <div className="mt-1">
-            <PayeeBadge domain={domain} address={checksumAddr} />
+          <div className="mt-1 space-y-1">
+            <PayeeBadge domain={domain} address={checksumAddr} funder={funderAddress ?? undefined} />
+            <AskPayeeToConfirmButton
+              payee={checksumAddr}
+              name={label.trim() || 'Payee'}
+              purpose={pot.title}
+              disabled={!label.trim()}
+            />
           </div>
         )}
       </div>
@@ -765,12 +774,14 @@ function RemovePayeeRow({ potId, payee, onRemoved }: { potId: bigint; payee: Pay
 }
 
 // ── PayeeRequestCard ──────────────────────────────────────────────────────────
-function PayeeRequestCard({ potId, req, requestId, onResolved }: {
+function PayeeRequestCard({ potId, req, requestId, potTitle, onResolved }: {
   potId: bigint;
   req: { payee: `0x${string}`; label: string; reason: string };
   requestId: bigint;
+  potTitle: string;
   onResolved: () => void;
 }) {
+  const { address: funderAddr } = useAccount()
   const approveAction = useContractAction()
   const rejectAction = useContractAction()
   const [confirmApprove, setConfirmApprove] = useState(false)
@@ -793,7 +804,10 @@ function PayeeRequestCard({ potId, req, requestId, onResolved }: {
         <p className="text-xs font-semibold text-[var(--ink)]">
           {parsedReq.name} <span className="font-normal text-[var(--muted)]">— <AddressChip address={req.payee} /></span>
         </p>
-        <PayeeBadge domain={parsedReq.domain} address={req.payee} className="mt-0.5" />
+        <PayeeBadge domain={parsedReq.domain} address={req.payee} funder={funderAddr ?? undefined} className="mt-0.5" />
+        <div className="mt-1">
+          <AskPayeeToConfirmButton payee={req.payee} name={parsedReq.name} purpose={potTitle} />
+        </div>
         {req.reason && <p className="text-xs italic text-[var(--muted)] mt-0.5">"{req.reason}"</p>}
       </div>
       {err && <p role="alert" className="text-xs text-danger">{err}</p>}
@@ -830,10 +844,10 @@ function PayeeRequestCard({ potId, req, requestId, onResolved }: {
             Money from this pot can then be sent to <strong>{parsedReq.name}</strong> at:
           </p>
           <p className="font-mono text-xs text-[var(--ink)] break-all">{req.payee}</p>
-          <PayeeBadge domain={parsedReq.domain} address={req.payee} />
+          <PayeeBadge domain={parsedReq.domain} address={req.payee} funder={funderAddr ?? undefined} />
           {!parsedReq.domain && (
             <p className="text-xs text-[var(--warning)]">
-              No website was provided. Confirm this wallet belongs to the right payee before approving.
+              Not verified. Ask the payee to confirm before approving — use the button on the request card.
             </p>
           )}
           <div className="flex gap-2">

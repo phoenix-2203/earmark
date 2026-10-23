@@ -24,6 +24,10 @@ const USE_CASES = [
 
 const ROADMAP = [
   {
+    title: 'Find and verify payees by email (Google sign-in)',
+    desc: 'Funders will be able to search for a payee by email address and automatically verify their wallet — no copy-pasting addresses or manual confirmation steps.',
+  },
+  {
     title: 'Sign in with Google (embedded wallets)',
     desc: 'Recipients and payees will be able to use Earmark with just a Google account — no crypto wallet setup required.',
   },

@@ -6,17 +6,49 @@
  * on either _earmark.<domain> or <domain> itself.
  *
  * Lookup uses Cloudflare DoH as primary, Google DoH as fallback (both support CORS).
- * Both resolve on HTTPS so no mixed-content issues in the browser.
- *
  * Caching: in-memory Map keyed by "domain:address" (lowercase), 10-minute TTL.
+ * Errors: both providers failing returns { status:'error' } and is NOT cached;
+ * only a successful DNS answer with no earmark= record is { status:'no-record' }.
+ *
+ * Free subdomain services (duckdns.org, github.io, etc.) return 'verified-free-host'
+ * — they confirm the wallet but don't prove a real business because anyone can
+ * register a subdomain there.
  */
+
+// ─── Free-host list ────────────────────────────────────────────────────────────
+
+export const FREE_HOSTS: string[] = [
+  'duckdns.org', 'github.io', 'gitlab.io', 'vercel.app', 'netlify.app',
+  'pages.dev', 'workers.dev', 'web.app', 'firebaseapp.com', 'herokuapp.com',
+  'onrender.com', 'fly.dev', 'railway.app', 'replit.app', 'repl.co',
+  'glitch.me', 'blogspot.com', 'wordpress.com', 'wixsite.com', 'weebly.com',
+  'square.site', 'carrd.co', 'notion.site', 'framer.website', 'webflow.io',
+  'ngrok-free.app', 'ngrok.io', 'no-ip.org', 'ddns.net', '000webhostapp.com',
+  'neocities.org', 'surge.sh', 'azurewebsites.net', 'appspot.com',
+  'cloudfront.net', 'amplifyapp.com', 'myshopify.com',
+]
+
+/**
+ * Returns true when domain equals a free host or is a subdomain of one.
+ * "a.duckdns.org" → true, "duckdns.org" → true, "myduckdns.org" → false.
+ */
+export function isFreeHost(domain: string): false | string {
+  const d = domain.toLowerCase()
+  for (const h of FREE_HOSTS) {
+    if (d === h || d.endsWith('.' + h)) return h
+  }
+  return false
+}
+
+// ─── Result type ──────────────────────────────────────────────────────────────
 
 export type VerifyResult =
   | { status: 'verified' }
-  | { status: 'mismatch';   otherAddresses: string[] }
+  | { status: 'verified-free-host'; host: string; domain: string }
+  | { status: 'mismatch';           otherAddresses: string[] }
   | { status: 'no-record' }
-  | { status: 'error';      message: string }
-  | { status: 'invalid-domain'; message: string }
+  | { status: 'error';              message: string }
+  | { status: 'invalid-domain';     message: string }
 
 // ─── Domain normalisation ──────────────────────────────────────────────────────
 
@@ -28,23 +60,17 @@ const DOMAIN_RE = /^(?=.{3,253}$)([a-z0-9-]{1,63}\.)+[a-z]{2,63}$/
  */
 export function normaliseDomain(raw: string): { ok: true; domain: string } | { ok: false; message: string } {
   let s = raw.trim().toLowerCase()
-  // Strip URL scheme
   s = s.replace(/^https?:\/\//, '')
-  // Strip www.
   s = s.replace(/^www\./, '')
-  // Strip path, query, fragment, port
   s = s.split('/')[0].split('?')[0].split('#')[0].split(':')[0]
-  // Strip trailing dot
   s = s.replace(/\.$/, '')
 
   if (!s) return { ok: false, message: 'Enter a domain name (e.g. haldensupplies.com).' }
   if (s.length < 3) return { ok: false, message: 'Domain too short.' }
 
-  // Reject non-ASCII (emoji domains, etc.)
   if (/[^\x20-\x7E]/.test(s)) {
     return { ok: false, message: 'Use the plain web address (letters, numbers and hyphens only).' }
   }
-  // Reject punycode (look-alike protection)
   if (s.split('.').some((label) => label.startsWith('xn--'))) {
     return { ok: false, message: 'Use the plain web address (letters, numbers and hyphens only).' }
   }
@@ -61,7 +87,7 @@ const CACHE_TTL_MS = 10 * 60 * 1000 // 10 minutes
 interface CacheEntry { result: VerifyResult; at: number }
 const cache = new Map<string, CacheEntry>()
 
-function cacheKey(domain: string, address: string) {
+export function cacheKey(domain: string, address: string) {
   return `${domain.toLowerCase()}:${address.toLowerCase()}`
 }
 
@@ -72,6 +98,11 @@ interface DnsResponse {
   Answer?: Array<{ type: number; data: string }>
 }
 
+/**
+ * Fetch DNS TXT records for `name` from one of two DoH providers.
+ * Throws an Error only when both providers fail or time out.
+ * Returns [] when the name exists but has no TXT records.
+ */
 async function fetchTxt(name: string, signal: AbortSignal): Promise<string[]> {
   const urls = [
     `https://cloudflare-dns.com/dns-query?name=${encodeURIComponent(name)}&type=TXT`,
@@ -84,56 +115,63 @@ async function fetchTxt(name: string, signal: AbortSignal): Promise<string[]> {
         headers: { accept: 'application/dns-json' },
         signal,
       })
-      if (!res.ok) continue
+      if (!res.ok) {
+        lastErr = new Error(`DoH HTTP ${res.status}`)
+        continue
+      }
       const json = (await res.json()) as DnsResponse
       if (json.Status !== 0) return []
-      // TXT data may be split into quoted chunks: "part1" "part2"
-      // Strip quotes and join.
       return (json.Answer ?? [])
         .filter((r) => r.type === 16) // 16 = TXT
         .map((r) =>
           r.data
-            .split('" "').join('')   // join adjacent chunks
-            .replace(/^"|"$/g, '')   // strip outer quotes
+            .split('" "').join('')
+            .replace(/^"|"$/g, '')
             .trim()
         )
     } catch (e) {
       lastErr = e instanceof Error ? e : new Error(String(e))
     }
   }
+  // Both providers failed
   throw lastErr ?? new Error('All DoH lookups failed')
 }
 
 // ─── Core verification ────────────────────────────────────────────────────────
 
+/**
+ * Try one DNS name; returns null when no earmark= record exists,
+ * { matched, others } when at least one earmark= record is present,
+ * and throws when the lookup itself fails (to be caught by the caller).
+ */
 async function checkName(
   name: string,
   address: string,
   signal: AbortSignal,
 ): Promise<{ matched: boolean; others: string[] } | null> {
-  try {
-    const records = await fetchTxt(name, signal)
-    const earmarkRecords = records.filter((r) => r.toLowerCase().startsWith('earmark='))
-    if (earmarkRecords.length === 0) return null
-    const others: string[] = []
-    let matched = false
-    for (const rec of earmarkRecords) {
-      const val = rec.slice('earmark='.length).trim()
-      if (val.toLowerCase() === address.toLowerCase()) {
-        matched = true
-      } else {
-        others.push(val)
-      }
+  const records = await fetchTxt(name, signal)
+  const earmarkRecords = records.filter((r) => r.toLowerCase().startsWith('earmark='))
+  if (earmarkRecords.length === 0) return null
+  const others: string[] = []
+  let matched = false
+  for (const rec of earmarkRecords) {
+    const val = rec.slice('earmark='.length).trim()
+    if (val.toLowerCase() === address.toLowerCase()) {
+      matched = true
+    } else {
+      others.push(val)
     }
-    return { matched, others }
-  } catch {
-    return null
   }
+  return { matched, others }
 }
 
 /**
  * Verify that `address` is published in a DNS TXT record under `domain`.
  * Checks `_earmark.<domain>` first, then `<domain>` itself.
+ *
+ * Returns 'error' (not cached) when both providers fail or time out.
+ * Returns 'no-record' (cached) only when DNS answered but had no earmark= record.
+ * Returns 'verified-free-host' (cached) when matched but domain is a free service.
  */
 export async function verifyPayeeDomain(
   rawDomain: string,
@@ -151,23 +189,31 @@ export async function verifyPayeeDomain(
   const timeout = setTimeout(() => ac.abort(), 6000)
 
   try {
-    // Check _earmark.<domain> first, then <domain>
-    const earmarkSub = await checkName(`_earmark.${domain}`, address, ac.signal)
-    const apex = earmarkSub ?? await checkName(domain, address, ac.signal)
+    // Both checkName calls may throw; wrap in try/catch after awaiting
+    let apex: { matched: boolean; others: string[] } | null = null
+    try {
+      apex = await checkName(`_earmark.${domain}`, address, ac.signal)
+        ?? await checkName(domain, address, ac.signal)
+    } catch {
+      // Network failure from fetchTxt propagates here; return error, do NOT cache
+      return { status: 'error', message: `Couldn't check ${domain} right now.` }
+    }
 
     let result: VerifyResult
     if (!apex) {
       result = { status: 'no-record' }
     } else if (apex.matched) {
-      result = { status: 'verified' }
+      const freeHost = isFreeHost(domain)
+      if (freeHost) {
+        result = { status: 'verified-free-host', host: freeHost, domain }
+      } else {
+        result = { status: 'verified' }
+      }
     } else {
       result = { status: 'mismatch', otherAddresses: apex.others }
     }
 
     cache.set(key, { result, at: Date.now() })
-    return result
-  } catch {
-    const result: VerifyResult = { status: 'error', message: "Couldn't check — both DNS lookups failed." }
     return result
   } finally {
     clearTimeout(timeout)
@@ -187,13 +233,8 @@ export interface VerifyState {
  * React hook that verifies a payee domain against an address.
  * Debounced 600ms; uses the module-level cache (10-minute TTL).
  * Pass domain='' or address='' to get { result: null, loading: false }.
- *
- * State is only updated asynchronously (never synchronously inside the effect
- * body) to satisfy the react/set-state-in-effect lint rule.
  */
 export function usePayeeVerification(domain: string, address: string): VerifyState {
-  // Derive the "should verify" key synchronously so we can initialise state
-  // from the cache without an effect.
   const normDomain = domain ? normaliseDomain(domain) : null
   const validDomain = normDomain?.ok ? normDomain.domain : null
   const shouldVerify = !!(validDomain && address)
@@ -211,13 +252,10 @@ export function usePayeeVerification(domain: string, address: string): VerifySta
 
   useEffect(() => {
     if (!shouldVerify || !validDomain) {
-      // Reset state asynchronously via microtask to avoid the sync-setState warning.
-      // This is safe: the component already shows nothing when result is null.
       const t = setTimeout(() => setState({ result: null, loading: false }), 0)
       return () => clearTimeout(t)
     }
 
-    // Check cache first
     const key = cacheKey(validDomain, address)
     const cached = cache.get(key)
     if (cached && Date.now() - cached.at < CACHE_TTL_MS) {
@@ -225,9 +263,7 @@ export function usePayeeVerification(domain: string, address: string): VerifySta
       return () => clearTimeout(t)
     }
 
-    // Show loading after a short tick to avoid spinner flash
     const loadingT = setTimeout(() => setState((s) => ({ ...s, loading: true })), 0)
-
     if (timerRef.current) clearTimeout(timerRef.current)
 
     timerRef.current = setTimeout(() => {

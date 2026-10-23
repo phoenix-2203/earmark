@@ -37,6 +37,7 @@ import { TxStatus } from '@/components/ui/TxStatus'
 import type { ActionState } from '@/hooks/useContractAction'
 import { GraduationCap, House, HeartPulse, Briefcase, Layers } from 'lucide-react'
 import PayeeBadge from '@/components/PayeeBadge'
+import AskPayeeToConfirmButton from '@/components/AskPayeeToConfirmButton'
 import { encodeLabel, encodedByteLength } from '@/lib/payeeLabel'
 import { normaliseDomain } from '@/lib/verifyPayee'
 
@@ -588,10 +589,17 @@ export default function CreatePotPage({ onBack, onSuccess }: Props) {
                   autoComplete="off"
                 />
                 {payee.checksumAddress && (
-                  <div className="mt-1">
+                  <div className="mt-1 space-y-1">
                     <PayeeBadge
                       domain={payee.website.trim() ? (() => { const n = normaliseDomain(payee.website); return n.ok ? n.domain : undefined })() : undefined}
                       address={payee.checksumAddress}
+                      funder={address}
+                    />
+                    <AskPayeeToConfirmButton
+                      payee={payee.checksumAddress}
+                      name={payee.label.trim() || 'Payee'}
+                      purpose={title.trim() || 'this pot'}
+                      disabled={!payee.label.trim()}
                     />
                   </div>
                 )}

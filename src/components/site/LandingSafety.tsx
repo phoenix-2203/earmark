@@ -50,7 +50,7 @@ export default function LandingSafety() {
             </div>
             <ul className="space-y-2.5">
               {[
-                'Verify who owns an address — domain verification is optional evidence, not a guarantee; always confirm directly with the payee',
+                'Verify a payee you never contacted yourself — domain badges and wallet confirmations are evidence, not substitutes for reaching out through channels you found',
                 'Reverse a payment once it has been confirmed',
                 'Work with tokens other than USDC',
               ].map((item) => (

@@ -11,11 +11,13 @@ import ForMePage from '@/pages/ForMePage'
 import ReceiptPage from '@/pages/ReceiptPage'
 import PotPage from '@/pages/PotPage'
 import HowItWorksPage from '@/pages/HowItWorksPage'
+import ConfirmPayeePage from '@/pages/ConfirmPayeePage'
+import PayeeConfirmedPage from '@/pages/PayeeConfirmedPage'
 import { EARMARK_CHAIN, EARMARK_ADDRESS } from '@/earmarkConfig'
 import { Send, Inbox, PiggyBank } from 'lucide-react'
 
 // ── Routes ──────────────────────────────────────────────────────────────────
-export type Page = 'home' | 'about' | 'send' | 'sent' | 'received' | 'receipt' | 'pot' | 'how'
+export type Page = 'home' | 'about' | 'send' | 'sent' | 'received' | 'receipt' | 'pot' | 'how' | 'confirm-payee' | 'payee-confirmed'
 
 interface Route {
   page: Page
@@ -38,6 +40,8 @@ function parseRoute(): Route {
   if (hash === '/received') return { page: 'received' }
   if (hash === '/how')      return { page: 'how' }
   if (hash === '/about' || hash.startsWith('/about')) return { page: 'about' }
+  if (hash.startsWith('/confirm-payee'))  return { page: 'confirm-payee' }
+  if (hash.startsWith('/payee-confirmed')) return { page: 'payee-confirmed' }
   return { page: 'home' }
 }
 
@@ -67,6 +71,8 @@ const SHELL_PAGES: Page[] = ['send', 'sent', 'received']
 const PUBLIC_PAGES: Page[] = ['pot', 'receipt']
 // Pages that render their own SiteHeader via their component (no shell from App)
 const SITE_PAGES: Page[] = ['home', 'about', 'how']
+// Pages that are standalone (no shell, no site header)
+const STANDALONE_PAGES: Page[] = ['confirm-payee', 'payee-confirmed']
 
 export default function App() {
   const [route, setRoute] = useState<Route>(parseRoute)
@@ -88,6 +94,19 @@ export default function App() {
   const showShell = SHELL_PAGES.includes(route.page)
   const showPublicHeader = PUBLIC_PAGES.includes(route.page)
   const isSitePage = SITE_PAGES.includes(route.page)
+  const isStandalone = STANDALONE_PAGES.includes(route.page)
+
+  // Standalone pages render themselves completely — no shell, no headers
+  if (isStandalone) {
+    return (
+      <>
+        {route.page === 'confirm-payee' && <ConfirmPayeePage />}
+        {route.page === 'payee-confirmed' && (
+          <PayeeConfirmedPage onBack={() => window.history.back()} />
+        )}
+      </>
+    )
+  }
 
   return (
     <div className="min-h-dvh" style={{ background: isSitePage ? '#fff' : 'var(--bg)' }}>

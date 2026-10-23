@@ -24,7 +24,7 @@ const FAQS = [
   },
   {
     q: 'How do I know a payee is real?',
-    a: 'Earmark cannot verify who owns a wallet address — anyone can give you any address. You should confirm the address directly with the payee (not via a link they send you). Optionally, a payee can publish a DNS TXT record on their domain pointing to their wallet address. When you enter their website in the payee form, Earmark checks the record and shows a "Verified by …" badge if the addresses match. This proves the person who controls the domain linked that wallet address, but it does not replace confirming the domain is the right one.',
+    a: 'Two ways. 1) Businesses with their own website add one line to their domain settings: earmark=0xTheirWallet — Earmark shows "Verified by theirdomain.com". Free addresses like *.duckdns.org or *.github.io don\'t count. 2) Anyone else: tap "Ask payee to confirm" and send the link using contact details you found yourself. They tap Confirm in their wallet (free) and send the link back. Never use contact details from the person asking you to add the payee.',
   },
   {
     q: 'What does a receipt prove?',

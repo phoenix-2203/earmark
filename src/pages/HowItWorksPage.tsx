@@ -191,31 +191,37 @@ export default function HowItWorksPage({ onBack, onSend, onAbout }: Props) {
             <ShieldCheck className="size-4 text-[var(--success)]" aria-hidden /> Verified payees
           </h2>
           <p className="mb-4 text-sm text-[var(--ink-2)] text-pretty">
-            Earmark can't verify who owns a wallet address — anyone can give you any address. Domain verification is an optional extra layer that lets a payee prove they control both a domain name and a wallet address.
+            Two ways to make sure a payee is real. Neither replaces contacting the payee through channels you found yourself.
           </p>
           <div className="space-y-3">
             <div className="rounded-card border border-[var(--line)] bg-[var(--surface)] p-4 shadow-card">
-              <p className="text-sm font-semibold text-[var(--ink)] mb-1">How it works</p>
-              <p className="text-sm text-[var(--ink-2)] text-pretty">
-                The payee publishes a DNS TXT record on their domain pointing to their wallet address. When you enter that domain in the payee website field, Earmark checks the record and shows a "Verified by example.com" badge if the address matches.
-              </p>
-            </div>
-            <div className="rounded-card border border-[var(--line)] bg-[var(--surface)] p-4 shadow-card">
-              <p className="text-sm font-semibold text-[var(--ink)] mb-1">What to ask the payee to add</p>
+              <p className="text-sm font-semibold text-[var(--ink)] mb-2">Option 1 — Domain verification (businesses with their own website)</p>
               <p className="text-sm text-[var(--ink-2)] mb-2 text-pretty">
-                Ask them to add a TXT record to their DNS. The record should go on either <code className="font-mono text-xs bg-[var(--surface-2)] px-1 rounded">_earmark.theirdomain.com</code> or the domain itself.
+                Businesses add one line to their domain settings:{' '}
+                <code className="font-mono text-xs bg-[var(--surface-2)] px-1 rounded">earmark=0xTheirWallet</code>{' '}
+                — Earmark then shows "Verified by theirdomain.com".
               </p>
-              <div className="rounded-input bg-[var(--surface-2)] px-4 py-3 font-mono text-xs text-[var(--ink)] break-all">
+              <div className="rounded-input bg-[var(--surface-2)] px-4 py-3 font-mono text-xs text-[var(--ink)] break-all mb-2">
                 earmark=0xTheirWalletAddress
               </div>
-              <p className="mt-2 text-xs text-[var(--muted)]">Replace <code className="font-mono">0xTheirWalletAddress</code> with the full Ethereum-format wallet address (starting 0x).</p>
+              <p className="text-xs text-[var(--muted)]">Add this as a TXT record on <code className="font-mono">_earmark.theirdomain.com</code> or the domain itself. Replace <code className="font-mono">0xTheirWalletAddress</code> with the full wallet address.</p>
+              <p className="mt-2 text-xs text-[var(--warning)] font-medium">Free addresses like *.duckdns.org or *.github.io don't count — anyone can register those.</p>
             </div>
             <div className="rounded-card border border-[var(--line)] bg-[var(--surface)] p-4 shadow-card">
-              <p className="text-sm font-semibold text-[var(--ink)] mb-1">What it proves and what it doesn't</p>
+              <p className="text-sm font-semibold text-[var(--ink)] mb-2">Option 2 — Ask them directly (anyone with a wallet)</p>
+              <p className="text-sm text-[var(--ink-2)] mb-2 text-pretty">
+                Tap <strong>"Ask payee to confirm"</strong> and send the link using contact details you found yourself — their official phone number, email or website. They tap Confirm in their wallet (free, no money moves) and send the link back. You paste or open it; Earmark verifies the signature.
+              </p>
+              <p className="text-xs text-[var(--warning)] font-medium">
+                Never use contact details from the person asking you to add the payee.
+              </p>
+            </div>
+            <div className="rounded-card border border-[var(--line)] bg-[var(--surface)] p-4 shadow-card">
+              <p className="text-sm font-semibold text-[var(--ink)] mb-1">What verification proves and what it doesn't</p>
               <ul className="list-disc pl-5 space-y-1 text-sm text-[var(--ink-2)]">
-                <li>It proves the person who controls the domain chose to link that wallet address.</li>
-                <li>It does NOT prove the domain belongs to the right company — confirm the domain separately.</li>
-                <li>DNS records can be changed or removed. The badge reflects the record at the time you check.</li>
+                <li><strong>Domain:</strong> the person controlling that domain linked this wallet address. Doesn't prove the domain belongs to the right company — confirm the domain separately.</li>
+                <li><strong>Wallet confirmation:</strong> someone who controls the payee's private key signed your request. The funder's responsibility is ensuring they're contacting the right person.</li>
+                <li>DNS records can change. The badge reflects the record at the time you check.</li>
               </ul>
             </div>
           </div>
