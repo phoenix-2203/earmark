@@ -10,16 +10,15 @@
  * - Every stat shows "—" while loading or on RPC error
  */
 import { useState, useEffect, useCallback } from 'react'
-import { createPublicClient, http, decodeEventLog } from 'viem'
-import { arcTestnet } from 'viem/chains'
+import { decodeEventLog } from 'viem'
 import { RefreshCw, ExternalLink } from 'lucide-react'
-import { EARMARK_ADDRESS, EARMARK_ABI, EARMARK_FROM_BLOCK, EARMARK_CHAIN } from '@/earmarkConfig'
+import { publicClient, EARMARK_ADDRESS, EARMARK_ABI, EARMARK_FROM_BLOCK, EARMARK_CHAIN } from '@/earmarkConfig'
 import { formatUsdc } from '@/onchain-money'
 
 const CHUNK = 9000n
 const MAX_PAYMENTS = 5
 
-// Extract the Paid and PotCreated event ABI entries from EARMARK_ABI so we never
+// Extract the Paid event ABI entry from EARMARK_ABI so we never
 // hand-write a signature that can drift out of sync with the contract.
 const PAID_ABI_EVENT = EARMARK_ABI.find(
   (e): e is typeof e & { type: 'event'; name: 'Paid' } =>
@@ -36,17 +35,6 @@ interface RecentPayment {
   txHash: `0x${string}`
 }
 
-function makeClient() {
-  const proxyChains = String(import.meta.env.VITE_RPC_PROXY_CHAINS ?? '').split(',')
-  const proxyBase = import.meta.env.VITE_RPC_PROXY_BASE_URL as string | undefined
-  const proxyToken = import.meta.env.VITE_RPC_PROXY_TOKEN as string | undefined
-  const rpcUrl =
-    proxyBase && proxyChains.includes('Arc_Testnet')
-      ? `${proxyBase}/api/rpc/Arc_Testnet?_rpc_token=${proxyToken ?? ''}`
-      : (EARMARK_CHAIN.rpcUrls[0] ?? 'https://rpc.arc.io')
-  return createPublicClient({ chain: arcTestnet, transport: http(rpcUrl) })
-}
-
 export default function LandingLiveOnArc() {
   const [potCount, setPotCount] = useState<bigint | null>(null)
   const [payments, setPayments] = useState<RecentPayment[]>([])
@@ -57,10 +45,8 @@ export default function LandingLiveOnArc() {
     setLoading(true)
     setError(null)
     try {
-      const client = makeClient()
-
       // 1. Read potCount() from the contract — authoritative, never under-counts
-      const rawCount = await client.readContract({
+      const rawCount = await publicClient.readContract({
         address: EARMARK_ADDRESS,
         abi: EARMARK_ABI,
         functionName: 'potCount',
@@ -68,7 +54,7 @@ export default function LandingLiveOnArc() {
       setPotCount(rawCount)
 
       // 2. Scan for Paid events newest-first, stop after MAX_PAYMENTS
-      const head = await client.getBlockNumber()
+      const head = await publicClient.getBlockNumber()
       const startBlock = EARMARK_FROM_BLOCK > 0n ? EARMARK_FROM_BLOCK : 0n
       const rawResults: Array<{
         potId: bigint
@@ -82,7 +68,7 @@ export default function LandingLiveOnArc() {
       while (from > startBlock && rawResults.length < MAX_PAYMENTS) {
         const to = from
         const chunkFrom = from > CHUNK ? from - CHUNK : startBlock
-        const paidLogs = await client.getLogs({
+        const paidLogs = await publicClient.getLogs({
           address: EARMARK_ADDRESS,
           // Pass the event ABI entry directly — viem uses it to build the topic filter
           event: PAID_ABI_EVENT,
@@ -129,13 +115,13 @@ export default function LandingLiveOnArc() {
           let payeeLabel: string | null = null
           try {
             const [payments, payees] = await Promise.all([
-              client.readContract({
+              publicClient.readContract({
                 address: EARMARK_ADDRESS,
                 abi: EARMARK_ABI,
                 functionName: 'getPayments',
                 args: [r.potId],
               }) as Promise<Array<{ payee: `0x${string}`; amount: bigint; memo: string; timestamp: bigint; payer: `0x${string}` }>>,
-              client.readContract({
+              publicClient.readContract({
                 address: EARMARK_ADDRESS,
                 abi: EARMARK_ABI,
                 functionName: 'getPayees',

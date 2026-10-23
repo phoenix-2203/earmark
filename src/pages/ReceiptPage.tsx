@@ -14,8 +14,10 @@ import { EARMARK_CHAIN } from '@/earmarkConfig'
 import { formatUsdc, shortAddr, formatDateTime } from '@/utils/format'
 import { downloadReceiptPng, receiptPngFile } from '@/utils/receiptCanvas'
 import CategoryBadge from '@/components/CategoryBadge'
+import PayeeBadge from '@/components/PayeeBadge'
 import { Card } from '@/components/ui/Card'
 import { AddressChip } from '@/components/ui/AddressChip'
+import { parseLabel } from '@/lib/payeeLabel'
 
 interface Props {
   potId: bigint
@@ -68,7 +70,7 @@ export default function ReceiptPage({ potId, paymentIndex, onBack }: Props) {
       memo:         payment.memo,
       purpose:      (pot as { title: string }).title,
       category:     (pot as { category: number }).category,
-      payeeLabel:   payeeEntry?.label ?? '',
+      payeeLabel:   payeeEntry ? parseLabel(payeeEntry.label).name : '',
       payeeAddress: payment.payee,
       payerAddress: payment.payer,
       dateTime:     formatDateTime(payment.timestamp),
@@ -127,6 +129,7 @@ export default function ReceiptPage({ potId, paymentIndex, onBack }: Props) {
   const payeeEntry = (payees ?? []).find(
     (p) => p.address.toLowerCase() === payment.payee.toLowerCase()
   )
+  const parsedPayee = payeeEntry ? parseLabel(payeeEntry.label) : null
   const dataReady    = !loading   // tx hash optional — still allow download
 
   // Does the browser support file sharing?
@@ -231,12 +234,13 @@ export default function ReceiptPage({ potId, paymentIndex, onBack }: Props) {
             <span className="text-xs uppercase tracking-widest text-[var(--muted)]">Category</span>
             <CategoryBadge category={(pot as { category: number }).category} />
           </div>
-          {payeeEntry ? (
+          {parsedPayee ? (
             <>
-              <Row label="Paid to" value={payeeEntry.label} />
+              <Row label="Paid to" value={parsedPayee.name} />
               <div>
                 <p className="text-xs uppercase tracking-widest text-[var(--muted)] mb-1">Payee address</p>
                 <AddressChip address={payment.payee} />
+                <PayeeBadge domain={parsedPayee.domain} address={payment.payee} className="mt-0.5" />
               </div>
             </>
           ) : (

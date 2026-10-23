@@ -14,7 +14,7 @@ import { erc20Abi } from 'viem'
 import { readContract, waitForTransactionReceipt } from '@wagmi/core'
 import {
   ArrowLeft, Share2, Check, ExternalLink, UserPlus, X, CalendarClock,
-  Gift, Undo2, Send, ReceiptText, Loader2, RefreshCw, AlertTriangle,
+  Gift, Undo2, Send, ReceiptText, Loader2, RefreshCw, AlertTriangle, HelpCircle,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { config } from '@/config'
@@ -43,6 +43,9 @@ import {
 } from '@/utils/format'
 import type { Pot, PayeeEntry } from '@/earmarkTypes'
 import type { Status } from '@/components/ui/StatusBadge'
+import PayeeBadge from '@/components/PayeeBadge'
+import { parseLabel, encodeLabel, encodedByteLength } from '@/lib/payeeLabel'
+import { normaliseDomain } from '@/lib/verifyPayee'
 
 interface Props {
   potId: bigint
@@ -277,23 +280,27 @@ export default function PotPage({ potId, onBack, onReceipt }: Props) {
             <p className="text-xs text-[var(--muted)]">No approved payees yet.</p>
           ) : (
             <ul className="space-y-2">
-              {payees.map((p) => (
-                <li key={p.address} className="flex items-center justify-between rounded-input bg-[var(--surface-2)] px-3 py-2.5">
-                  <div>
-                    <p className="text-sm font-semibold text-[var(--ink)]">{p.label}</p>
-                    <AddressChip address={p.address} />
-                  </div>
-                  <a
-                    href={`${EARMARK_CHAIN.explorerBase}/address/${p.address}`}
-                    target="_blank"
-                    rel="noreferrer"
-                    aria-label={`View ${p.label} on explorer`}
-                    className="ml-2 text-[var(--muted)] hover:text-[var(--ink)] focus-visible:outline-2 focus-visible:outline-[var(--focus)] rounded min-w-[28px] min-h-[28px] flex items-center justify-center"
-                  >
-                    <ExternalLink className="size-3.5" aria-hidden />
-                  </a>
-                </li>
-              ))}
+              {payees.map((p) => {
+                const parsed = parseLabel(p.label)
+                return (
+                  <li key={p.address} className="flex items-center justify-between rounded-input bg-[var(--surface-2)] px-3 py-2.5">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold text-[var(--ink)]">{parsed.name}</p>
+                      <AddressChip address={p.address} />
+                      <PayeeBadge domain={parsed.domain} address={p.address} className="mt-0.5" />
+                    </div>
+                    <a
+                      href={`${EARMARK_CHAIN.explorerBase}/address/${p.address}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      aria-label={`View ${parsed.name} on explorer`}
+                      className="ml-2 text-[var(--muted)] hover:text-[var(--ink)] focus-visible:outline-2 focus-visible:outline-[var(--focus)] rounded min-w-[28px] min-h-[28px] flex items-center justify-center shrink-0"
+                    >
+                      <ExternalLink className="size-3.5" aria-hidden />
+                    </a>
+                  </li>
+                )
+              })}
             </ul>
           )}
         </Card>
@@ -617,6 +624,7 @@ function AddPayeeForm({ potId, pot, payees, onDone }: { potId: bigint; pot: Pot;
   const [rawAddr, setRawAddr] = useState('')
   const [checksumAddr, setChecksumAddr] = useState<`0x${string}` | null>(null)
   const [label, setLabel] = useState('')
+  const [website, setWebsite] = useState('')
   const [valErr, setValErr] = useState<string | undefined>()
   const action = useContractAction()
 
@@ -624,16 +632,20 @@ function AddPayeeForm({ potId, pot, payees, onDone }: { potId: bigint; pot: Pot;
     if (action.state === 'confirmed') { onDone() }
   }, [action.state, onDone])
 
+  const normWeb = website.trim() ? normaliseDomain(website) : null
+  const domain = normWeb?.ok ? normWeb.domain : undefined
+
   async function handleAdd() {
     if (!checksumAddr) { setValErr('Enter a valid address.'); return }
     if (!label.trim()) { setValErr('Enter a label.'); return }
-    if (label.length > 48) { setValErr('Label must be 48 characters or fewer.'); return }
+    if (encodedByteLength(label, domain) > 48) { setValErr('Name and website together must be 48 characters or fewer — shorten the name.'); return }
     if (checksumAddr.toLowerCase() === pot.sender.toLowerCase()) { setValErr('The funder cannot be a payee.'); return }
     if (checksumAddr.toLowerCase() === pot.beneficiary.toLowerCase()) { setValErr('The recipient cannot be a payee.'); return }
     if (payees.some((p) => p.address.toLowerCase() === checksumAddr.toLowerCase())) { setValErr('This address is already an approved payee.'); return }
     setValErr(undefined)
+    const encodedLabel = encodeLabel(label, domain)
     await action.execute({
-      contractCall: { address: EARMARK_ADDRESS, abi: EARMARK_ABI, functionName: 'addPayee', args: [potId, checksumAddr, label], chainId: EARMARK_CHAIN_ID },
+      contractCall: { address: EARMARK_ADDRESS, abi: EARMARK_ABI, functionName: 'addPayee', args: [potId, checksumAddr, encodedLabel], chainId: EARMARK_CHAIN_ID },
     })
   }
 
@@ -655,6 +667,26 @@ function AddPayeeForm({ potId, pot, payees, onDone }: { potId: bigint; pot: Pot;
       <div>
         <label className="mb-1 block text-xs text-[var(--muted)]">Wallet address</label>
         <AddressInput value={rawAddr} onChange={(raw, cs) => { setRawAddr(raw); setChecksumAddr(cs) }} placeholder="0x…" />
+      </div>
+      <div>
+        <label className="mb-1 flex items-center gap-1 text-xs text-[var(--muted)]">
+          Website (optional)
+          <a href="#/how" className="ml-1 text-[var(--accent)] hover:underline inline-flex items-center gap-0.5 focus-visible:outline-2 focus-visible:outline-[var(--focus)] rounded" title="How domain verification works">
+            <HelpCircle className="size-3" aria-hidden /> How?
+          </a>
+        </label>
+        <input
+          value={website}
+          onChange={(e) => setWebsite(e.target.value)}
+          placeholder="haldensupplies.com"
+          autoComplete="off"
+          className="w-full rounded-input border border-[var(--line)] bg-[var(--surface-2)] px-3 py-2 text-sm text-[var(--ink)] placeholder:text-[var(--muted)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)]"
+        />
+        {checksumAddr && (
+          <div className="mt-1">
+            <PayeeBadge domain={domain} address={checksumAddr} />
+          </div>
+        )}
       </div>
       {err && <p role="alert" className="text-xs text-danger">{err}</p>}
       {action.txHash && <TxStatus state={action.state} txHash={action.txHash} />}
@@ -686,17 +718,18 @@ function RemovePayeeRow({ potId, payee, onRemoved }: { potId: bigint; payee: Pay
     })
   }
 
+  const parsedPayee = parseLabel(payee.label)
   return (
     <li className="flex items-center justify-between rounded-input bg-[var(--surface)] px-3 py-2">
       <div>
-        <p className="text-xs font-semibold text-[var(--ink)]">{payee.label}</p>
+        <p className="text-xs font-semibold text-[var(--ink)]">{parsedPayee.name}</p>
         <AddressChip address={payee.address} />
       </div>
       <Button
         variant="danger"
         size="sm"
         loading={action.isBusy}
-        aria-label={`Remove ${payee.label}`}
+        aria-label={`Remove ${parsedPayee.name}`}
         onClick={() => { action.reset(); setConfirmOpen(true) }}
       >
         <X className="size-3.5" aria-hidden />
@@ -705,7 +738,7 @@ function RemovePayeeRow({ potId, payee, onRemoved }: { potId: bigint; payee: Pay
       <Dialog open={confirmOpen} onClose={() => { setConfirmOpen(false); action.reset() }} title="Remove payee">
         <div className="space-y-4">
           <p className="text-sm text-[var(--ink-2)]">
-            Remove <strong>{payee.label}</strong>? The recipient won't be able to pay this address from this pot.
+            Remove <strong>{parsedPayee.name}</strong>? The recipient won't be able to pay this address from this pot.
           </p>
           <p className="font-mono text-xs text-[var(--muted)] break-all">{payee.address}</p>
           {action.errorMessage && (
@@ -741,6 +774,7 @@ function PayeeRequestCard({ potId, req, requestId, onResolved }: {
   const approveAction = useContractAction()
   const rejectAction = useContractAction()
   const [confirmApprove, setConfirmApprove] = useState(false)
+  const parsedReq = parseLabel(req.label)
 
   useEffect(() => {
     if (approveAction.state === 'confirmed' || rejectAction.state === 'confirmed') {
@@ -757,9 +791,10 @@ function PayeeRequestCard({ potId, req, requestId, onResolved }: {
     <div className="rounded-card border border-[#DCE8F5] bg-[var(--surface)] p-3 space-y-2">
       <div>
         <p className="text-xs font-semibold text-[var(--ink)]">
-          {req.label} <span className="font-normal text-[var(--muted)]">— <AddressChip address={req.payee} /></span>
+          {parsedReq.name} <span className="font-normal text-[var(--muted)]">— <AddressChip address={req.payee} /></span>
         </p>
-        {req.reason && <p className="text-xs italic text-[var(--muted)]">"{req.reason}"</p>}
+        <PayeeBadge domain={parsedReq.domain} address={req.payee} className="mt-0.5" />
+        {req.reason && <p className="text-xs italic text-[var(--muted)] mt-0.5">"{req.reason}"</p>}
       </div>
       {err && <p role="alert" className="text-xs text-danger">{err}</p>}
       <div className="flex gap-2">
@@ -792,12 +827,15 @@ function PayeeRequestCard({ potId, req, requestId, onResolved }: {
       <Dialog open={confirmApprove} onClose={() => setConfirmApprove(false)} title="Approve payee">
         <div className="space-y-4">
           <p className="text-sm text-[var(--ink-2)]">
-            Money from this pot can then be sent to <strong>{req.label}</strong> at:
+            Money from this pot can then be sent to <strong>{parsedReq.name}</strong> at:
           </p>
           <p className="font-mono text-xs text-[var(--ink)] break-all">{req.payee}</p>
-          <p className="text-xs text-[var(--warning)]">
-            Warning: Earmark cannot verify who owns this address. Confirm it belongs to the right institution before approving.
-          </p>
+          <PayeeBadge domain={parsedReq.domain} address={req.payee} />
+          {!parsedReq.domain && (
+            <p className="text-xs text-[var(--warning)]">
+              No website was provided. Confirm this wallet belongs to the right payee before approving.
+            </p>
+          )}
           <div className="flex gap-2">
             <Button
               size="sm"
@@ -971,7 +1009,9 @@ function PayForm({ potId, payees, balance, onDone }: { potId: bigint; payees: Pa
       <div>
         <p className="mb-2 text-xs text-[var(--muted)]">Pay to</p>
         <ul className="space-y-2" role="radiogroup" aria-label="Approved payees">
-          {payees.map((p) => (
+          {payees.map((p) => {
+            const pp = parseLabel(p.label)
+            return (
             <li key={p.address}>
               <label className={`flex cursor-pointer items-center gap-3 rounded-input border p-3 transition-colors
                 ${selectedPayee === p.address ? 'border-[var(--accent)] bg-[var(--accent-soft)]' : 'border-[var(--line)] bg-[var(--surface-2)] hover:bg-[var(--surface-2)]'}`}
@@ -985,12 +1025,14 @@ function PayForm({ potId, payees, balance, onDone }: { potId: bigint; payees: Pa
                   className="accent-[var(--accent)] size-4"
                 />
                 <div className="min-w-0 flex-1">
-                  <p className="text-sm font-semibold text-[var(--ink)]">{p.label}</p>
+                  <p className="text-sm font-semibold text-[var(--ink)]">{pp.name}</p>
                   <AddressChip address={p.address} />
+                  <PayeeBadge domain={pp.domain} address={p.address} className="mt-0.5" />
                 </div>
               </label>
             </li>
-          ))}
+            )
+          })}
         </ul>
       </div>
 
@@ -1012,7 +1054,7 @@ function PayForm({ potId, payees, balance, onDone }: { potId: bigint; payees: Pa
 
       <div className="flex gap-2">
         <Button size="sm" loading={action.isBusy} loadingLabel="Sending…" onClick={() => void handleSubmit()} className="flex-1" disabled={overBalance || rawAmount === 0n}>
-          <Send className="size-3.5" aria-hidden /> {payeeEntry ? `Pay ${payeeEntry.label}` : 'Send payment'}
+          <Send className="size-3.5" aria-hidden /> {payeeEntry ? `Pay ${parseLabel(payeeEntry.label).name}` : 'Send payment'}
         </Button>
         <Button variant="secondary" size="sm" onClick={onDone}>Cancel</Button>
       </div>
@@ -1022,7 +1064,7 @@ function PayForm({ potId, payees, balance, onDone }: { potId: bigint; payees: Pa
           <div className="rounded-input bg-[var(--surface-2)] p-3 space-y-1.5 text-sm">
             <div className="flex justify-between">
               <span className="text-[var(--muted)]">Payee</span>
-              <span className="font-semibold text-[var(--ink)]">{payeeEntry?.label ?? shortAddr(selectedPayee)}</span>
+              <span className="font-semibold text-[var(--ink)]">{payeeEntry ? parseLabel(payeeEntry.label).name : shortAddr(selectedPayee)}</span>
             </div>
             <div className="flex justify-between font-mono">
               <span className="text-[var(--muted)]">Address</span>
@@ -1059,6 +1101,7 @@ function RequestPayeeForm({ potId, pot, payees, onDone }: { potId: bigint; pot: 
   const [rawAddr, setRawAddr] = useState('')
   const [checksumAddr, setChecksumAddr] = useState<`0x${string}` | null>(null)
   const [label, setLabel] = useState('')
+  const [website, setWebsite] = useState('')
   const [reason, setReason] = useState('')
   const [valErr, setValErr] = useState<string | undefined>()
   const action = useContractAction()
@@ -1066,12 +1109,14 @@ function RequestPayeeForm({ potId, pot, payees, onDone }: { potId: bigint; pot: 
     if (action.state === 'confirmed') { toast.success('Request sent!'); onDone() }
   }, [action.state, onDone])
 
+  const normWeb = website.trim() ? normaliseDomain(website) : null
+  const domain = normWeb?.ok ? normWeb.domain : undefined
   const err = valErr ?? action.errorMessage
 
   async function handleRequest() {
     if (!checksumAddr) { setValErr('Enter a valid address.'); return }
     if (!label.trim()) { setValErr('Enter a label.'); return }
-    if (label.length > 48) { setValErr('Label must be 48 characters or fewer.'); return }
+    if (encodedByteLength(label, domain) > 48) { setValErr('Name and website together must be 48 characters or fewer — shorten the name.'); return }
     if (reason.length > 140) { setValErr('Reason must be 140 characters or fewer.'); return }
     if (checksumAddr.toLowerCase() === pot.sender.toLowerCase()) {
       setValErr("That's the funder or the recipient. Earmark only pays outside payees — that's what keeps the money tied to its purpose."); return
@@ -1086,8 +1131,9 @@ function RequestPayeeForm({ potId, pot, payees, onDone }: { potId: bigint; pot: 
       setValErr("You can't request yourself as a payee."); return
     }
     setValErr(undefined)
+    const encodedLabel = encodeLabel(label, domain)
     await action.execute({
-      contractCall: { address: EARMARK_ADDRESS, abi: EARMARK_ABI, functionName: 'requestPayee', args: [potId, checksumAddr, label, reason], chainId: EARMARK_CHAIN_ID },
+      contractCall: { address: EARMARK_ADDRESS, abi: EARMARK_ABI, functionName: 'requestPayee', args: [potId, checksumAddr, encodedLabel, reason], chainId: EARMARK_CHAIN_ID },
     })
   }
 
@@ -1106,6 +1152,26 @@ function RequestPayeeForm({ potId, pot, payees, onDone }: { potId: bigint; pot: 
       <div>
         <label className="mb-1 block text-xs text-[var(--muted)]">Wallet address</label>
         <AddressInput value={rawAddr} onChange={(raw, cs) => { setRawAddr(raw); setChecksumAddr(cs) }} placeholder="0x…" />
+      </div>
+      <div>
+        <label className="mb-1 flex items-center gap-1 text-xs text-[var(--muted)]">
+          Website (optional)
+          <a href="#/how" className="ml-1 text-[var(--accent)] hover:underline inline-flex items-center gap-0.5 focus-visible:outline-2 focus-visible:outline-[var(--focus)] rounded" title="How domain verification works">
+            <HelpCircle className="size-3" aria-hidden /> How?
+          </a>
+        </label>
+        <input
+          value={website}
+          onChange={(e) => setWebsite(e.target.value)}
+          placeholder="haldensupplies.com"
+          autoComplete="off"
+          className="w-full rounded-input border border-[var(--line)] bg-[var(--surface-2)] px-3 py-2 text-sm text-[var(--ink)] placeholder:text-[var(--muted)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)]"
+        />
+        {checksumAddr && (
+          <div className="mt-1">
+            <PayeeBadge domain={domain} address={checksumAddr} />
+          </div>
+        )}
       </div>
       <div>
         <label className="mb-1 block text-xs text-[var(--muted)]">Reason (optional, max 140 chars)</label>

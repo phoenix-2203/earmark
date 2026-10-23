@@ -7,6 +7,7 @@
  * shows a "contract not deployed" notice.
  */
 
+import { createPublicClient, http } from 'viem'
 import { getUsdc, requireChain } from '@/onchain-facts'
 
 const networkEnv = String(import.meta.env.VITE_NETWORK ?? 'testnet').toLowerCase()
@@ -33,6 +34,37 @@ export const EARMARK_ADDRESS = (import.meta.env.VITE_EARMARK_ADDRESS ?? '') as `
 export const EARMARK_FROM_BLOCK: bigint = BigInt(
   String(import.meta.env.VITE_EARMARK_FROM_BLOCK ?? '0')
 )
+
+/**
+ * A viem-compatible Chain object built from the onchain-facts registry entry
+ * for the active network. Use this wherever viem needs a Chain type.
+ * Never import arcTestnet or any other hardcoded viem/chains entry — it would
+ * always point at testnet regardless of VITE_NETWORK.
+ */
+export const VIEM_CHAIN = {
+  id: EARMARK_CHAIN.chainId,
+  name: EARMARK_CHAIN.name,
+  nativeCurrency: {
+    name: EARMARK_CHAIN.nativeCurrency.symbol,
+    symbol: EARMARK_CHAIN.nativeCurrency.symbol,
+    decimals: EARMARK_CHAIN.nativeCurrency.decimals,
+  },
+  rpcUrls: {
+    default: { http: EARMARK_CHAIN.rpcUrls as [string, ...string[]] },
+  },
+  blockExplorers: {
+    default: { name: 'Explorer', url: EARMARK_CHAIN.explorerBase },
+  },
+} as const
+
+/**
+ * Shared public viem client for the active network.
+ * Import this instead of creating a new createPublicClient in each file.
+ */
+export const publicClient = createPublicClient({
+  chain: VIEM_CHAIN,
+  transport: http(EARMARK_CHAIN.rpcUrls[0]),
+})
 
 export const EARMARK_ABI = [
   // createPot

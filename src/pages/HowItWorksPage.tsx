@@ -1,4 +1,4 @@
-import { ArrowLeft, GraduationCap, CheckCircle2, ReceiptText, ExternalLink } from 'lucide-react'
+import { ArrowLeft, GraduationCap, CheckCircle2, ReceiptText, ExternalLink, ShieldCheck } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import SiteHeader from '@/components/site/SiteHeader'
 import SiteFooter from '@/components/site/SiteFooter'
@@ -16,7 +16,7 @@ const STEPS = [
     n: 1,
     Icon: GraduationCap,
     title: 'Create a pot for one expense',
-    body: `A pot is USDC set aside for a single purpose — supplier invoices, project materials, travel, rent, or anything else. The funder sets the title, category, and amount, then picks an end date: if money is left after that date, the funder can take it back. At least one approved payee (a school, supplier, clinic, or landlord) must be added when creating the pot. The recipient can ask the funder to add more later.`,
+    body: `A pot is USDC set aside for a single purpose — for example a supplier or service provider, or a specific project or expense. The funder sets the title, category, and amount, then picks an end date: if money is left after that date, the funder can take it back. At least one approved payee must be added when creating the pot. The recipient can ask the funder to add more later.`,
   },
   {
     n: 2,
@@ -46,7 +46,7 @@ const GLOSSARY = [
 const ROLES = [
   {
     role: 'Funder',
-    can: 'Create and fund pots, add or remove payees, approve or reject payee requests, top up, extend the end date, release the rest, take back unspent money after the end date',
+    can: 'Create and fund pots, pay approved payees, add or remove payees, approve or reject payee requests, top up, extend the end date, release the rest, take back unspent money after the end date',
     cannot: 'Be a payee of their own pot',
   },
   {
@@ -182,6 +182,42 @@ export default function HowItWorksPage({ onBack, onSend, onAbout }: Props) {
                 <p className="text-sm text-[var(--muted)]">{cannot}</p>
               </div>
             ))}
+          </div>
+        </section>
+
+        {/* ── Verified payees ── */}
+        <section className="mb-12" aria-labelledby="verified-payees-h">
+          <h2 id="verified-payees-h" className="mb-1 flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-[var(--muted)]">
+            <ShieldCheck className="size-4 text-[var(--success)]" aria-hidden /> Verified payees
+          </h2>
+          <p className="mb-4 text-sm text-[var(--ink-2)] text-pretty">
+            Earmark can't verify who owns a wallet address — anyone can give you any address. Domain verification is an optional extra layer that lets a payee prove they control both a domain name and a wallet address.
+          </p>
+          <div className="space-y-3">
+            <div className="rounded-card border border-[var(--line)] bg-[var(--surface)] p-4 shadow-card">
+              <p className="text-sm font-semibold text-[var(--ink)] mb-1">How it works</p>
+              <p className="text-sm text-[var(--ink-2)] text-pretty">
+                The payee publishes a DNS TXT record on their domain pointing to their wallet address. When you enter that domain in the payee website field, Earmark checks the record and shows a "Verified by example.com" badge if the address matches.
+              </p>
+            </div>
+            <div className="rounded-card border border-[var(--line)] bg-[var(--surface)] p-4 shadow-card">
+              <p className="text-sm font-semibold text-[var(--ink)] mb-1">What to ask the payee to add</p>
+              <p className="text-sm text-[var(--ink-2)] mb-2 text-pretty">
+                Ask them to add a TXT record to their DNS. The record should go on either <code className="font-mono text-xs bg-[var(--surface-2)] px-1 rounded">_earmark.theirdomain.com</code> or the domain itself.
+              </p>
+              <div className="rounded-input bg-[var(--surface-2)] px-4 py-3 font-mono text-xs text-[var(--ink)] break-all">
+                earmark=0xTheirWalletAddress
+              </div>
+              <p className="mt-2 text-xs text-[var(--muted)]">Replace <code className="font-mono">0xTheirWalletAddress</code> with the full Ethereum-format wallet address (starting 0x).</p>
+            </div>
+            <div className="rounded-card border border-[var(--line)] bg-[var(--surface)] p-4 shadow-card">
+              <p className="text-sm font-semibold text-[var(--ink)] mb-1">What it proves and what it doesn't</p>
+              <ul className="list-disc pl-5 space-y-1 text-sm text-[var(--ink-2)]">
+                <li>It proves the person who controls the domain chose to link that wallet address.</li>
+                <li>It does NOT prove the domain belongs to the right company — confirm the domain separately.</li>
+                <li>DNS records can be changed or removed. The badge reflects the record at the time you check.</li>
+              </ul>
+            </div>
           </div>
         </section>
 

@@ -2,26 +2,17 @@
  * useEventTxHash — look up the transaction hash for a specific Earmark event
  * by scanning getLogs in chunks of 9,000 blocks, newest first.
  * Results are cached in module-level memory so navigating back doesn't re-scan.
+ *
+ * Uses the shared publicClient from earmarkConfig so the active network
+ * (testnet or mainnet) is always respected — never hardcodes arcTestnet.
  */
 
 import { useState, useEffect } from 'react'
-import { createPublicClient, http } from 'viem'
-import { arcTestnet } from 'viem/chains'
-import { EARMARK_ADDRESS, EARMARK_ABI, EARMARK_FROM_BLOCK } from '@/earmarkConfig'
-
-// Use the viem chain object so createPublicClient gets a proper Chain type
-const VIEM_CHAIN = arcTestnet // Arc Testnet (chainId 5042002); mainnet would be a custom chain object
+import { publicClient, EARMARK_ADDRESS, EARMARK_ABI, EARMARK_FROM_BLOCK } from '@/earmarkConfig'
 
 const cache = new Map<string, `0x${string}` | null>()
 
 const CHUNK = 9_000n
-
-function getClient() {
-  return createPublicClient({
-    chain: VIEM_CHAIN,
-    transport: http(),
-  })
-}
 
 /**
  * Find the tx hash for a specific Paid event (potId, paymentIndex).
@@ -35,10 +26,7 @@ export function usePaidEventTxHash(potId: bigint | undefined, paymentIndex: numb
 
   useEffect(() => {
     if (!key || potId === undefined || paymentIndex === undefined) return
-    if (cache.has(key)) {
-      // Already cached — no state update needed; initial state was set from cache
-      return
-    }
+    if (cache.has(key)) return
     if (!EARMARK_ADDRESS || EARMARK_ADDRESS.length <= 2) return
 
     let cancelled = false
@@ -47,10 +35,8 @@ export function usePaidEventTxHash(potId: bigint | undefined, paymentIndex: numb
       if (cancelled) return
       setLoading(true)
       try {
-        const client = getClient()
-        const head = await client.getBlockNumber()
+        const head = await publicClient.getBlockNumber()
         const from = EARMARK_FROM_BLOCK > 0n ? EARMARK_FROM_BLOCK : 0n
-        // Scan from newest to oldest
         let hi = head
         let found: `0x${string}` | null = null
 
@@ -59,14 +45,11 @@ export function usePaidEventTxHash(potId: bigint | undefined, paymentIndex: numb
           const lo = hi >= CHUNK ? hi - CHUNK + 1n : from
           const actualLo = lo < from ? from : lo
 
-          const logs = await client.getContractEvents({
+          const logs = await publicClient.getContractEvents({
             address: EARMARK_ADDRESS,
             abi: EARMARK_ABI,
             eventName: 'Paid',
-            args: {
-              potId: potId,
-              paymentIndex: BigInt(paymentIndex),
-            },
+            args: { potId, paymentIndex: BigInt(paymentIndex) },
             fromBlock: actualLo,
             toBlock: hi,
           })
@@ -106,10 +89,7 @@ export function usePotCreatedTxHash(potId: bigint | undefined) {
 
   useEffect(() => {
     if (!key || potId === undefined) return
-    if (cache.has(key)) {
-      // Already cached — no state update needed; initial state was set from cache
-      return
-    }
+    if (cache.has(key)) return
     if (!EARMARK_ADDRESS || EARMARK_ADDRESS.length <= 2) return
 
     let cancelled = false
@@ -118,8 +98,7 @@ export function usePotCreatedTxHash(potId: bigint | undefined) {
       if (cancelled) return
       setLoading(true)
       try {
-        const client = getClient()
-        const head = await client.getBlockNumber()
+        const head = await publicClient.getBlockNumber()
         const from = EARMARK_FROM_BLOCK > 0n ? EARMARK_FROM_BLOCK : 0n
         let hi = head
         let found: `0x${string}` | null = null
@@ -129,7 +108,7 @@ export function usePotCreatedTxHash(potId: bigint | undefined) {
           const lo = hi >= CHUNK ? hi - CHUNK + 1n : from
           const actualLo = lo < from ? from : lo
 
-          const logs = await client.getContractEvents({
+          const logs = await publicClient.getContractEvents({
             address: EARMARK_ADDRESS,
             abi: EARMARK_ABI,
             eventName: 'PotCreated',

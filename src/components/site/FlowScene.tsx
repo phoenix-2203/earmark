@@ -256,7 +256,7 @@ function PotCard({ x, y, w, h, potTitle, potAmt, currency, payeeLabels }: PotCar
 
   // Amount row: 28px bold amount + 14px "USDC" on same baseline
   const amtY    = firstLineY + titleLines.length * lineH + 16
-  const amtStr  = String(potAmt)
+  const amtStr  = potAmt.toLocaleString('en-US')
   // Approximate width of amount string at 28px (charW ≈ 16px)
   const amtW    = amtStr.length * 16
   const usdcX   = x + PAD + amtW + 6
@@ -665,8 +665,8 @@ export default function FlowScene({
   ]
 
   // Paid lines for payee cards (fix #1: inside card, no floating chip)
-  const paidLine1 = pay1Done ? `✓ Paid ${p1Amt} ${curr}` : undefined
-  const paidLine2 = pay2Done ? `✓ Paid ${p2Amt} ${curr}` : undefined
+  const paidLine1 = pay1Done ? `✓ Paid ${p1Amt.toLocaleString('en-US')} ${curr}` : undefined
+  const paidLine2 = pay2Done ? `✓ Paid ${p2Amt.toLocaleString('en-US')} ${curr}` : undefined
 
   // ── Static (reduced motion) frame ─────────────────────────────────────────
   if (prefersReduced) {
@@ -675,7 +675,7 @@ export default function FlowScene({
       <div
         className={`w-full rounded-card border border-[var(--line)] bg-[var(--surface)] p-2 ${className}`}
         role="img"
-        aria-label={`Earmark flow: the funder locks ${amountNum} ${curr} into "${potTitle}"; the recipient can pay ${payees[0].label} and ${payees[1].label}; payments to ${blockedLabel} are blocked; unspent money returns to the funder.`}
+        aria-label={`Earmark flow: the funder locks ${amountNum.toLocaleString('en-US')} ${curr} into "${potTitle}"; the recipient can pay ${payees[0].label} and ${payees[1].label}; payments to ${blockedLabel} are blocked; unspent money returns to the funder.`}
       >
         <svg viewBox={`0 0 ${sl.vw} ${sl.vh}`} width="100%" style={{ display: 'block' }}>
           <defs><style>{CSS_KEYFRAMES}</style></defs>
@@ -719,7 +719,7 @@ export default function FlowScene({
         width="100%"
         style={{ display: 'block' }}
         role="img"
-        aria-label={`Earmark flow: the funder locks ${amountNum} ${curr} into "${potTitle}"; the recipient can pay ${payees[0].label} and ${payees[1].label}; payments to ${blockedLabel} are blocked; unspent money returns to the funder.`}
+        aria-label={`Earmark flow: the funder locks ${amountNum.toLocaleString('en-US')} ${curr} into "${potTitle}"; the recipient can pay ${payees[0].label} and ${payees[1].label}; payments to ${blockedLabel} are blocked; unspent money returns to the funder.`}
       >
         <defs><style>{CSS_KEYFRAMES}</style></defs>
 

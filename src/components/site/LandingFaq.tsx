@@ -23,6 +23,10 @@ const FAQS = [
     a: 'After the end date the funder can call "Take back unspent money" to reclaim the remaining balance. Alternatively, the funder can use "Release the rest to recipient" at any time to send the balance to the recipient.',
   },
   {
+    q: 'How do I know a payee is real?',
+    a: 'Earmark cannot verify who owns a wallet address — anyone can give you any address. You should confirm the address directly with the payee (not via a link they send you). Optionally, a payee can publish a DNS TXT record on their domain pointing to their wallet address. When you enter their website in the payee form, Earmark checks the record and shows a "Verified by …" badge if the addresses match. This proves the person who controls the domain linked that wallet address, but it does not replace confirming the domain is the right one.',
+  },
+  {
     q: 'What does a receipt prove?',
     a: 'A receipt proves that a specific amount of USDC was sent from a specific pot to a specific payee address on a specific date, recorded on Arc. It does not prove who owns those addresses in the real world — you need to verify that separately.',
   },

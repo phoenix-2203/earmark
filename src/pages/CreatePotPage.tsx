@@ -18,7 +18,7 @@ import {
   simulateContract, writeContract, waitForTransactionReceipt,
 } from '@wagmi/core'
 import { BaseError, ContractFunctionRevertedError, UserRejectedRequestError, decodeEventLog } from 'viem'
-import { Plus, Trash2, ArrowLeft } from 'lucide-react'
+import { Plus, Trash2, ArrowLeft, HelpCircle } from 'lucide-react'
 import { toast } from 'sonner'
 import { config } from '@/config'
 import {
@@ -36,6 +36,9 @@ import { Stepper } from '@/components/ui/Stepper'
 import { TxStatus } from '@/components/ui/TxStatus'
 import type { ActionState } from '@/hooks/useContractAction'
 import { GraduationCap, House, HeartPulse, Briefcase, Layers } from 'lucide-react'
+import PayeeBadge from '@/components/PayeeBadge'
+import { encodeLabel, encodedByteLength } from '@/lib/payeeLabel'
+import { normaliseDomain } from '@/lib/verifyPayee'
 
 const CATEGORY_ICONS_COMP = [GraduationCap, House, HeartPulse, Briefcase, Layers]
 
@@ -47,6 +50,7 @@ interface PayeeRow {
   rawAddress: string
   checksumAddress: `0x${string}` | null
   label: string
+  website: string   // raw user input; normalised before encoding
 }
 
 interface Props {
@@ -85,7 +89,7 @@ export default function CreatePotPage({ onBack, onSuccess }: Props) {
   const [category, setCategory] = useState(0)
   const [amount, setAmount] = useState('')
   const [expiryDate, setExpiryDate] = useState('')
-  const [payees, setPayees] = useState<PayeeRow[]>([{ rawAddress: '', checksumAddress: null, label: '' }])
+  const [payees, setPayees] = useState<PayeeRow[]>([{ rawAddress: '', checksumAddress: null, label: '', website: '' }])
 
   // Field errors
   const [errors, setErrors] = useState<Record<string, string>>({})
@@ -148,7 +152,11 @@ export default function CreatePotPage({ onBack, onSuccess }: Props) {
         e.payees = 'The funder cannot be an approved payee.'; break
       }
       if (!p.label.trim()) { e.payees = 'Every payee needs a label.'; break }
-      if (p.label.length > 48) { e.payees = 'Payee labels must be 48 characters or fewer.'; break }
+      const normWeb = p.website.trim() ? normaliseDomain(p.website) : null
+      const domain = normWeb?.ok ? normWeb.domain : undefined
+      if (encodedByteLength(p.label, domain) > 48) {
+        e.payees = 'Name and website together must be 48 characters or fewer — shorten the name.'; break
+      }
       if (seenAddrs.has(p.checksumAddress.toLowerCase())) { e.payees = 'Duplicate payee address.'; break }
       seenAddrs.add(p.checksumAddress.toLowerCase())
     }
@@ -206,7 +214,11 @@ export default function CreatePotPage({ onBack, onSuccess }: Props) {
 
       // 2. Create pot (only completed rows)
       const payeeAddrs = completedPayees.map((p) => p.checksumAddress as `0x${string}`)
-      const payeeLabels = completedPayees.map((p) => p.label)
+      const payeeLabels = completedPayees.map((p) => {
+        const normWeb = p.website.trim() ? normaliseDomain(p.website) : null
+        const domain = normWeb?.ok ? normWeb.domain : undefined
+        return encodeLabel(p.label, domain)
+      })
 
       setTxPhase('awaitingCreate')
       await simulateContract(config, {
@@ -508,7 +520,7 @@ export default function CreatePotPage({ onBack, onSuccess }: Props) {
             </div>
             <button
               type="button"
-              onClick={() => setPayees((p) => [...p, { rawAddress: '', checksumAddress: null, label: '' }])}
+              onClick={() => setPayees((p) => [...p, { rawAddress: '', checksumAddress: null, label: '', website: '' }])}
               disabled={payees.length >= 20}
               className="flex items-center gap-1 text-xs font-semibold text-[var(--accent)] hover:text-[var(--accent-hover)] disabled:opacity-40 focus-visible:outline-2 focus-visible:outline-[var(--focus)] rounded"
             >
@@ -554,6 +566,35 @@ export default function CreatePotPage({ onBack, onSuccess }: Props) {
                   }
                   placeholder="0x…"
                 />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs text-[var(--muted)] flex items-center gap-1">
+                  Website (optional)
+                  <a
+                    href="#/how"
+                    className="ml-1 text-[var(--accent)] hover:underline inline-flex items-center gap-0.5 focus-visible:outline-2 focus-visible:outline-[var(--focus)] rounded"
+                    title="How domain verification works"
+                    aria-label="How payee domain verification works"
+                  >
+                    <HelpCircle className="size-3" aria-hidden /> How?
+                  </a>
+                </label>
+                <input
+                  value={payee.website}
+                  onChange={(e) => setPayees((p) => p.map((r, j) => j === i ? { ...r, website: e.target.value } : r))}
+                  placeholder="haldensupplies.com"
+                  className="w-full rounded-input border border-[var(--line)] bg-[var(--surface)] px-3 py-2 text-sm text-[var(--ink)] placeholder:text-[var(--muted)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)]"
+                  aria-label={`Website for payee ${i + 1}`}
+                  autoComplete="off"
+                />
+                {payee.checksumAddress && (
+                  <div className="mt-1">
+                    <PayeeBadge
+                      domain={payee.website.trim() ? (() => { const n = normaliseDomain(payee.website); return n.ok ? n.domain : undefined })() : undefined}
+                      address={payee.checksumAddress}
+                    />
+                  </div>
+                )}
               </div>
             </div>
           ))}
