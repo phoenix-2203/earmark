@@ -53,7 +53,7 @@ In every case, the person spending the money can't send it to themselves or anyo
 
 1. **Create a pot.** The funder sets a purpose ("Office fit-out · Phase 1"), an amount in USDC, an end date, and at least one approved payee (a wallet address plus a name such as "Halden Building Supplies").
 2. **Approve who can be paid.** Only those addresses can receive money from the pot. The recipient can **ask** for a new payee (for example a new supplier); the funder approves or rejects it.
-3. **The recipient pays.** They pick an approved payee, an amount and a memo ("PO-1042 · materials"). The contract checks the rules and sends the USDC straight to the payee.
+3. **The recipient pays** (the funder can pay too). They pick an approved payee, an amount and a memo ("PO-1042 · materials"). The contract checks the rules and sends the USDC straight to the payee.
 4. **Anyone can verify.** Each payment has a public receipt page with a QR code, plus a downloadable receipt image, linked to the transaction on the Arc explorer.
 5. **Leftovers.** After the end date the funder can take back what's unspent. At any time, the funder can choose to release the rest to the recipient with no restrictions.
 
@@ -61,14 +61,14 @@ In every case, the person spending the money can't send it to themselves or anyo
 
 | Role | Can | Can't |
 |---|---|---|
-| **Funder** | Create and fund pots, add or remove payees, approve or reject payee requests, top up, extend the end date, release the rest, take back unspent money after the end date | Be a payee of their own pot |
+| **Funder** | Create and fund pots, pay approved payees too, add or remove payees, approve or reject payee requests, top up, extend the end date, release the rest, take back unspent money after the end date | Be a payee of their own pot |
 | **Recipient** | Pay approved payees, ask for new payees | Pay themselves, pay anyone not approved, withdraw the money |
 | **Approved payee** | Receive payments | Nothing else; no account needed, just a wallet address |
 
 ### What the contract guarantees, and what it doesn't
 
 **Guaranteed by the contract on Arc:**
-- Money only goes to approved payees.
+- Money only goes to approved payees, and no payments can be made after the end date.
 - The funder and the recipient can never be payees of their own pot.
 - No owner, no admin key, no upgrades, no platform fees.
 - Unspent money returns to the funder after the end date.
