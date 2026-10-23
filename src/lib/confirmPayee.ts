@@ -17,7 +17,7 @@
  *   earmark.confirmedPayees  — Map<funder+payee, ConfirmedPayee>
  */
 
-import { EARMARK_CHAIN_ID } from '@/earmarkConfig'
+import { EARMARK_CHAIN_ID, publicClient as defaultPublicClient } from '@/earmarkConfig'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -264,4 +264,156 @@ export function getPendingRequests(funder: `0x${string}`): ConfirmRequest[] {
       !isRequestExpired(r) &&
       !confirmed[`${funder.toLowerCase()}:${r.payee.toLowerCase()}`],
   )
+}
+
+/**
+ * Remove a request from localStorage (single-use: deleted after successful verification).
+ */
+export function deleteStoredRequest(code: string): void {
+  const map = loadRequests()
+  delete map[code]
+  saveRequests(map)
+}
+
+// ─── Verification types for injectable storage / verifyMessage ────────────────
+
+/** Injectable storage for testability (defaults to real localStorage helpers). */
+export interface ConfirmStorage {
+  getRequest(code: string): ConfirmRequest | null
+  deleteRequest(code: string): void
+  storeConfirmed(funder: `0x${string}`, payee: `0x${string}`, name: string, code: string): void
+}
+
+/** Injectable verifyMessage signature (matches publicClient.verifyMessage). */
+export type VerifyMessageFn = (args: {
+  address: `0x${string}`
+  message: string
+  signature: `0x${string}`
+}) => Promise<boolean>
+
+/** Default real-localStorage storage implementation. */
+export const defaultStorage: ConfirmStorage = {
+  getRequest: getStoredRequest,
+  deleteRequest: deleteStoredRequest,
+  storeConfirmed: storeConfirmedPayee,
+}
+
+// ─── verifyReply — single authoritative verification function ─────────────────
+
+/**
+ * Verify a payee reply link and signature.
+ *
+ * SECURITY PROPERTIES:
+ * - Only reads the `code` from the decoded link; all trust-carrying data
+ *   (payee, name, purpose, funder, chainId, exp) comes from `stored` —
+ *   the request this browser generated. A tampered link is rejected.
+ * - Field-by-field equality: any mismatch → rejection.
+ * - Single-use: the stored request is deleted on success so replays fail.
+ * - verifyMessage uses the stored payee address (not the link's), and the
+ *   message is built from `stored` — an attacker who swaps their own address
+ *   into the link will fail the field-match check before signature verification.
+ *
+ * @param encoded   The `r=` parameter from the reply link.
+ * @param signature The `s=` parameter from the reply link.
+ * @param connectedFunder The funder's connected wallet address.
+ * @param expectedPayee If provided (paste box on a specific row), stored.payee must match.
+ * @param verify    Injectable verifyMessage function (defaults to publicClient.verifyMessage).
+ * @param storage   Injectable storage (defaults to real localStorage helpers).
+ */
+export async function verifyReply(
+  encoded: string,
+  signature: string,
+  connectedFunder: `0x${string}`,
+  expectedPayee?: `0x${string}`,
+  verify: VerifyMessageFn = (args) => defaultPublicClient.verifyMessage(args),
+  storage: ConfirmStorage = defaultStorage,
+): Promise<{ ok: true; stored: ConfirmRequest } | { ok: false; reason: string }> {
+
+  // 1. Decode just to extract the code — we don't trust any other field yet.
+  const decoded = decodeRequest(encoded)
+  if (!decoded) {
+    return { ok: false, reason: 'Could not read the reply link.' }
+  }
+
+  // 2. Look up the request this browser generated.
+  const stored = storage.getRequest(decoded.code)
+  if (!stored) {
+    return {
+      ok: false,
+      reason: "This confirmation wasn't requested from this browser or wallet — ask the payee again from here.",
+    }
+  }
+
+  // 3. Field-by-field equality check: every trust-bearing field in the decoded link
+  //    must match `stored` exactly. This prevents an attacker from crafting a link
+  //    with the same code but a different wallet, name, or purpose.
+  if (
+    decoded.v !== stored.v ||
+    decoded.chainId !== stored.chainId ||
+    decoded.funder.toLowerCase() !== stored.funder.toLowerCase() ||
+    decoded.payee.toLowerCase() !== stored.payee.toLowerCase() ||
+    decoded.name !== stored.name ||
+    decoded.purpose !== stored.purpose ||
+    decoded.code !== stored.code ||
+    decoded.exp !== stored.exp
+  ) {
+    return {
+      ok: false,
+      reason: "This reply doesn't match the request you sent — ask the payee again.",
+    }
+  }
+
+  // 4. Expiry (use stored, not decoded, to be safe).
+  if (isRequestExpired(stored)) {
+    return { ok: false, reason: 'This confirmation has expired — ask the payee for a new one.' }
+  }
+
+  // 5. ChainId must match this app's chain.
+  if (stored.chainId !== EARMARK_CHAIN_ID) {
+    return { ok: false, reason: `This confirmation is for a different network (chain ${stored.chainId}).` }
+  }
+
+  // 6. Funder must be the currently connected wallet.
+  if (stored.funder.toLowerCase() !== connectedFunder.toLowerCase()) {
+    return {
+      ok: false,
+      reason: `This confirmation was requested by a different wallet — connect the right one.`,
+    }
+  }
+
+  // 7. If this paste box belongs to a specific payee row, the stored payee must match.
+  if (expectedPayee && stored.payee.toLowerCase() !== expectedPayee.toLowerCase()) {
+    return {
+      ok: false,
+      reason: `This reply is for a different wallet (${stored.payee.slice(0, 6)}…${stored.payee.slice(-4)}).`,
+    }
+  }
+
+  // 8. Validate signature format.
+  if (!/^0x[0-9a-fA-F]+$/.test(signature)) {
+    return { ok: false, reason: 'The reply link contains an invalid signature.' }
+  }
+
+  // 9. Verify the signature against the STORED request (not the decoded link).
+  const message = buildConfirmMessage(stored)
+  let valid = false
+  try {
+    valid = await verify({
+      address: stored.payee,
+      message,
+      signature: signature as `0x${string}`,
+    })
+  } catch {
+    return { ok: false, reason: "Couldn't verify the signature — check your connection and try again." }
+  }
+
+  if (!valid) {
+    return { ok: false, reason: 'The signature is not valid for this wallet address. The payee may have signed with a different wallet.' }
+  }
+
+  // 10. Store and delete (single-use).
+  storage.storeConfirmed(stored.funder, stored.payee, stored.name, stored.code)
+  storage.deleteRequest(stored.code)
+
+  return { ok: true, stored }
 }

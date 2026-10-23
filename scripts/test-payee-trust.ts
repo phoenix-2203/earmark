@@ -7,8 +7,12 @@ import { isFreeHost, normaliseDomain } from '../src/lib/verifyPayee'
 import {
   generateCode, formatCode, encodeRequest, decodeRequest,
   buildConfirmMessage, isRequestExpired, CONFIRM_TTL_SECS,
+  verifyReply, type ConfirmRequest, type ConfirmStorage,
 } from '../src/lib/confirmPayee'
-import type { ConfirmRequest } from '../src/lib/confirmPayee'
+import { privateKeyToAccount } from 'viem/accounts'
+import { signMessage } from 'viem/actions'
+import { createWalletClient, http, verifyMessage } from 'viem'
+import { mainnet } from 'viem/chains'
 
 let passed = 0
 let failed = 0
@@ -160,6 +164,154 @@ console.log('\nPart A — expiry')
 {
   // TTL constant
   assert('CONFIRM_TTL_SECS is 7 days', CONFIRM_TTL_SECS === 7 * 24 * 60 * 60)
+}
+
+// ─── Part A: verifyReply security tests ──────────────────────────────────────
+//
+// Uses two Anvil test accounts:
+//   FUNDER  = Anvil account 0  (0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266)
+//   PAYEE   = Anvil account 1  (0x70997970C51812dc3A010C7d01b50e0d17dc79C8)
+//   ATTACKER= Anvil account 2  (0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC)
+//
+// We stub publicClient.verifyMessage with a pure viem verifyMessage call (no RPC
+// needed — viem can verify EOA signatures locally without a blockchain).
+
+console.log('\nPart A — verifyReply security tests')
+
+const FUNDER_KEY    = '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80' as const
+const PAYEE_KEY     = '0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d' as const
+const ATTACKER_KEY  = '0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a' as const
+
+const funderAccount   = privateKeyToAccount(FUNDER_KEY)
+const payeeAccount    = privateKeyToAccount(PAYEE_KEY)
+const attackerAccount = privateKeyToAccount(ATTACKER_KEY)
+
+const CHAIN_ID = 5042002  // Arc Testnet — matches SAMPLE_REQ
+
+/** Build a wallet client for signing (mainnet chain object, no RPC used for signing). */
+function walletClient(account: ReturnType<typeof privateKeyToAccount>) {
+  return createWalletClient({ account, chain: mainnet, transport: http() })
+}
+
+/** Sign a message with the given account. */
+async function sign(account: ReturnType<typeof privateKeyToAccount>, message: string): Promise<`0x${string}`> {
+  return signMessage(walletClient(account), { account, message })
+}
+
+/** viem local verifyMessage (no RPC — works for EOA signatures in tests). */
+async function localVerify(args: { address: `0x${string}`; message: string; signature: `0x${string}` }): Promise<boolean> {
+  try {
+    return await verifyMessage(args)
+  } catch {
+    return false
+  }
+}
+
+/** Build a minimal in-memory ConfirmStorage with a single stored request. */
+function makeStorage(stored: ConfirmRequest): ConfirmStorage & { confirmed: Record<string, unknown>; deleted: string[] } {
+  const map: Record<string, ConfirmRequest> = { [stored.code]: stored }
+  const confirmed: Record<string, unknown> = {}
+  const deleted: string[] = []
+  return {
+    getRequest: (code) => map[code] ?? null,
+    deleteRequest: (code) => { deleted.push(code); delete map[code] },
+    storeConfirmed: (f, p, n, c) => { confirmed[`${f.toLowerCase()}:${p.toLowerCase()}`] = { p, n, c } },
+    confirmed,
+    deleted,
+  }
+}
+
+/** Build a valid ConfirmRequest for FUNDER → PAYEE. */
+function makeReq(overrides: Partial<ConfirmRequest> = {}): ConfirmRequest {
+  return {
+    v: 1,
+    chainId: CHAIN_ID,
+    funder: funderAccount.address,
+    payee: payeeAccount.address,
+    name: 'Halden Building Supplies',
+    purpose: 'Office fit-out Phase 1',
+    code: 'TESTCD99',
+    exp: Math.floor(Date.now() / 1000) + 3600,
+    ...overrides,
+  }
+}
+
+{
+  // (a) Valid reply → ok; code is deleted (single-use); stored fields come from storage not link
+  const req = makeReq()
+  const sig = await sign(payeeAccount, buildConfirmMessage(req))
+  const storage = makeStorage(req)
+  const encoded = encodeRequest(req)
+  const result = await verifyReply(encoded, sig, funderAccount.address, undefined, localVerify, storage)
+  assert('(a) valid reply → ok', result.ok)
+  if (result.ok) {
+    assert('(a) stored.name comes from storage', result.stored.name === req.name)
+    assert('(a) stored.payee comes from storage', result.stored.payee.toLowerCase() === payeeAccount.address.toLowerCase())
+  }
+  assert('(a) code deleted after success (single-use)', storage.deleted.includes(req.code))
+}
+
+{
+  // (b) Attacker swaps their own address into a link with the same code, signs with their key
+  const req = makeReq()
+  // Craft a poisoned link: same code, but payee = attacker
+  const poisonedReq: ConfirmRequest = { ...req, payee: attackerAccount.address }
+  const attackerSig = await sign(attackerAccount, buildConfirmMessage(poisonedReq))
+  const storage = makeStorage(req)  // storage has the REAL req (payee = payeeAccount)
+  const encodedPoison = encodeRequest(poisonedReq)
+  const result = await verifyReply(encodedPoison, attackerSig, funderAccount.address, undefined, localVerify, storage)
+  assert('(b) attacker payee swap → rejected (field mismatch)', !result.ok)
+  if (!result.ok) assert('(b) reason mentions request mismatch', result.reason.includes("doesn't match"))
+}
+
+{
+  // (c) Name changed in the link (link.name !== stored.name)
+  const req = makeReq()
+  const tamperedReq: ConfirmRequest = { ...req, name: 'Evil Corp' }
+  const sig = await sign(payeeAccount, buildConfirmMessage(tamperedReq))
+  const storage = makeStorage(req)
+  const encoded = encodeRequest(tamperedReq)
+  const result = await verifyReply(encoded, sig, funderAccount.address, undefined, localVerify, storage)
+  assert('(c) name changed in link → rejected (field mismatch)', !result.ok)
+}
+
+{
+  // (d) Unknown code (not in this browser's localStorage)
+  const req = makeReq({ code: 'UNKNWN99' })
+  const sig = await sign(payeeAccount, buildConfirmMessage(req))
+  // Storage has a DIFFERENT code
+  const storage = makeStorage(makeReq({ code: 'DIFFR123' }))
+  const encoded = encodeRequest(req)
+  const result = await verifyReply(encoded, sig, funderAccount.address, undefined, localVerify, storage)
+  assert('(d) unknown code → rejected', !result.ok)
+  if (!result.ok) assert('(d) reason mentions not requested from this browser', result.reason.includes("wasn't requested"))
+}
+
+{
+  // (e) Reply is for a different payee row (expectedPayee mismatch)
+  const req = makeReq()
+  const sig = await sign(payeeAccount, buildConfirmMessage(req))
+  const storage = makeStorage(req)
+  const encoded = encodeRequest(req)
+  const wrongExpected = attackerAccount.address
+  const result = await verifyReply(encoded, sig, funderAccount.address, wrongExpected, localVerify, storage)
+  assert('(e) wrong expectedPayee → rejected', !result.ok)
+  if (!result.ok) assert('(e) reason mentions different wallet', result.reason.includes('different wallet'))
+}
+
+{
+  // (f) Code reuse — second call after first call succeeds should fail
+  const req = makeReq()
+  const sig = await sign(payeeAccount, buildConfirmMessage(req))
+  const storage = makeStorage(req)
+  const encoded = encodeRequest(req)
+  // First call succeeds
+  const first = await verifyReply(encoded, sig, funderAccount.address, undefined, localVerify, storage)
+  assert('(f) first call succeeds', first.ok)
+  // Second call — code was deleted
+  const second = await verifyReply(encoded, sig, funderAccount.address, undefined, localVerify, storage)
+  assert('(f) second call (code reuse) → rejected', !second.ok)
+  if (!second.ok) assert('(f) reason mentions not requested from this browser', second.reason.includes("wasn't requested"))
 }
 
 // ─── Summary ──────────────────────────────────────────────────────────────────

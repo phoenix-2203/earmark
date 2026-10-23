@@ -23,12 +23,9 @@ import { toast } from 'sonner'
 import { Button } from '@/components/ui/Button'
 import { Dialog } from '@/components/ui/Dialog'
 import {
-  createConfirmRequest, decodeRequest, buildConfirmMessage,
-  isRequestExpired, getStoredRequest, storeConfirmedPayee,
-  formatCode, hasPendingRequest, getConfirmedPayee,
+  createConfirmRequest, decodeRequest,
+  formatCode, hasPendingRequest, getConfirmedPayee, verifyReply,
 } from '@/lib/confirmPayee'
-import { publicClient } from '@/earmarkConfig'
-import { shortAddr } from '@/utils/format'
 
 interface Props {
   payee:    `0x${string}`
@@ -53,6 +50,7 @@ export default function AskPayeeToConfirmButton({ payee, name, purpose, disabled
   const [phase, setPhase] = useState<DialogPhase>('share')
   const [pasteValue, setPasteValue] = useState('')
   const [failReason, setFailReason] = useState('')
+  const [confirmedName, setConfirmedName] = useState('')
 
   // Already confirmed in this browser?
   const confirmed = funder ? getConfirmedPayee(funder, payee) : null
@@ -74,10 +72,9 @@ export default function AskPayeeToConfirmButton({ payee, name, purpose, disabled
 
   async function handleVerifyReply(raw: string) {
     const trimmed = raw.trim()
-    if (!trimmed) return
-    if (!funder) return
+    if (!trimmed || !funder) return
 
-    // Parse the reply link
+    // Parse r= and s= from the reply link (accepts full URL or bare query string)
     let encoded: string | null = null
     let sig: string | null = null
     try {
@@ -87,7 +84,7 @@ export default function AskPayeeToConfirmButton({ payee, name, purpose, disabled
       encoded = params.get('r')
       sig = params.get('s')
     } catch {
-      setFailReason('That doesn\'t look like a valid reply link.')
+      setFailReason("That doesn't look like a valid reply link.")
       setPhase('fail')
       return
     }
@@ -98,56 +95,19 @@ export default function AskPayeeToConfirmButton({ payee, name, purpose, disabled
       return
     }
 
-    const req = decodeRequest(encoded)
-    if (!req) {
-      setFailReason('Could not read the reply link.')
-      setPhase('fail')
-      return
-    }
-
     setPhase('verifying')
 
-    // Validate
-    if (isRequestExpired(req)) {
-      setFailReason('This confirmation has expired — ask the payee for a new one.')
-      setPhase('fail')
-      return
-    }
-    if (req.chainId !== (await publicClient.getChainId())) {
-      setFailReason(`This confirmation is for a different network (chain ${req.chainId}).`)
-      setPhase('fail')
-      return
-    }
-    if (req.funder.toLowerCase() !== funder.toLowerCase()) {
-      setFailReason(`This confirmation was requested by a different wallet (${shortAddr(req.funder)}).`)
-      setPhase('fail')
-      return
-    }
-    if (!getStoredRequest(req.code)) {
-      setFailReason("This confirmation wasn't requested from this browser or wallet — ask the payee again from here.")
+    // Delegate ALL validation logic to verifyReply.
+    // Pass payee as expectedPayee so a reply for a different row is rejected.
+    const result = await verifyReply(encoded, sig, funder, payee)
+
+    if (!result.ok) {
+      setFailReason(result.reason)
       setPhase('fail')
       return
     }
 
-    try {
-      const message = buildConfirmMessage(req)
-      const valid = await publicClient.verifyMessage({
-        address: req.payee,
-        message,
-        signature: sig as `0x${string}`,
-      })
-      if (!valid) {
-        setFailReason('The signature is not valid for this wallet address.')
-        setPhase('fail')
-        return
-      }
-    } catch {
-      setFailReason("Couldn't verify the signature — check your connection and try again.")
-      setPhase('fail')
-      return
-    }
-
-    storeConfirmedPayee(funder, req.payee, req.name, req.code)
+    setConfirmedName(result.stored.name)
     setPhase('success')
     toast.success('Payee confirmed!')
     onConfirmed?.()
@@ -264,7 +224,7 @@ export default function AskPayeeToConfirmButton({ payee, name, purpose, disabled
               <CheckCircle2 className="size-10 text-[var(--success)]" />
               <p className="text-sm font-semibold text-[var(--ink)]">Payee confirmed!</p>
               <p className="text-xs text-[var(--ink-2)] text-center">
-                {name} proved they control this wallet. The badge will now show "Confirmed by the wallet owner".
+                {confirmedName} proved they control this wallet. The badge will now show "Confirmed by the wallet owner".
               </p>
             </div>
             <Button className="w-full" onClick={handleClose}>Close</Button>
