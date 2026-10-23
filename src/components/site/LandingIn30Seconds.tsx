@@ -1,16 +1,15 @@
 /**
  * "Earmark in 30 seconds" landing section.
- * Left column: 3 paragraphs + analogy card.
- * Right column (desktop): nothing — FlowScene runs full-width BELOW the two columns.
+ * Story uses the office fit-out / project budget main example.
  */
-import { CreditCard, GraduationCap, BookOpen, User } from 'lucide-react'
+import { CreditCard, Building2, Hammer, Zap } from 'lucide-react'
 import FlowScene, { type SceneParty } from '@/components/site/FlowScene'
 
-const SCENE_FUNDER:    SceneParty = { label: 'You',              Icon: CreditCard     }
-const SCENE_RECIPIENT: SceneParty = { label: 'Your brother',     Icon: User           }
+const SCENE_FUNDER:    SceneParty = { label: 'Your company',   Icon: Building2 }
+const SCENE_RECIPIENT: SceneParty = { label: 'The contractor', Icon: Hammer    }
 const SCENE_PAYEES: [SceneParty, SceneParty] = [
-  { label: 'Greenfield School', Icon: GraduationCap },
-  { label: 'City Bookshop',     Icon: BookOpen       },
+  { label: 'Halden Building Supplies', Icon: Hammer },
+  { label: 'Brightline Electrical',    Icon: Zap    },
 ]
 
 export default function LandingIn30Seconds() {
@@ -35,22 +34,23 @@ export default function LandingIn30Seconds() {
           {/* Left: story */}
           <div className="space-y-5">
             <p className="text-base leading-relaxed text-[var(--ink-2)]">
-              You send your brother{' '}
-              <strong className="font-semibold text-[var(--ink)]">500 USDC for school fees</strong>.
-              With a normal transfer, the money is his — it can be spent on anything, and you have no proof where it went.
+              Your company gives a contractor a{' '}
+              <strong className="font-semibold text-[var(--ink)]">5,000 USDC budget for office materials</strong>.
+              With a normal transfer the money is theirs — it can be spent on anything, and you only find out later where it went.
             </p>
             <p className="text-base leading-relaxed text-[var(--ink-2)]">
-              With Earmark, you put the 500 USDC in a pot called{' '}
-              <em>"School fees · Term 1"</em> and approve{' '}
-              <strong className="font-semibold text-[var(--ink)]">Greenfield School</strong> and{' '}
-              <strong className="font-semibold text-[var(--ink)]">City Bookshop</strong>.
-              Your brother still decides when and how much to pay — but the contract will only send money to those two.
-              If he tries to pay himself or anyone else, it's blocked.
+              With Earmark you put the 5,000 USDC in a pot called{' '}
+              <em>"Office fit-out · Phase 1"</em> and approve{' '}
+              <strong className="font-semibold text-[var(--ink)]">Halden Building Supplies</strong> and{' '}
+              <strong className="font-semibold text-[var(--ink)]">Brightline Electrical</strong>.
+              The contractor still decides when and how much to pay — but the contract will only send money to those two.
+              A payment to the contractor's own wallet, or anyone else, is blocked.
             </p>
             <p className="text-base leading-relaxed text-[var(--ink-2)]">
               Every payment leaves a{' '}
               <strong className="font-semibold text-[var(--ink)]">public receipt</strong>{' '}
               anyone can check. Money left after the end date comes back to you.
+              The same works for grants, aid budgets, staff allowances and money sent home.
             </p>
           </div>
 
@@ -62,8 +62,8 @@ export default function LandingIn30Seconds() {
             >
               <CreditCard className="mt-0.5 size-6 shrink-0 text-[var(--accent)]" aria-hidden />
               <p className="text-sm leading-relaxed text-[var(--ink-2)]">
-                <strong className="font-semibold text-[var(--ink)]">Like a prepaid card</strong>{' '}
-                that only works at the shops you chose — and every swipe is visible to both of you.
+                <strong className="font-semibold text-[var(--ink)]">Like a company card</strong>{' '}
+                that only works with the suppliers you approved — and every transaction is visible to both sides.
               </p>
             </div>
           </div>
@@ -74,9 +74,9 @@ export default function LandingIn30Seconds() {
           funder={SCENE_FUNDER}
           recipient={SCENE_RECIPIENT}
           payees={SCENE_PAYEES}
-          blocked="Your brother's own wallet"
-          potTitle="School fees · Term 1"
-          amountNum={500}
+          blocked="Contractor's own wallet"
+          potTitle="Office fit-out · Phase 1"
+          amountNum={5000}
           currency="USDC"
         />
       </div>

@@ -1,6 +1,7 @@
 /**
- * Section 4 — Try the rules (interactive simulator, no wallet).
+ * Section — Try the rules (interactive simulator, no wallet).
  * Mirrors the exact contract rules from Earmark.sol.
+ * Example pot: Office fit-out · Phase 1, 5,000 USDC.
  */
 import { useState } from 'react'
 import { CheckCircle2, XCircle } from 'lucide-react'
@@ -11,25 +12,25 @@ interface RuleTest {
   rule: string
 }
 
-const FUNDER   = '0xF000…0001'
+const FUNDER    = '0xF000…0001'
 const RECIPIENT = '0xRE00…0002'
-const BALANCE_USDC = 500
+const BALANCE_USDC = '5,000'
 
 const TESTS: RuleTest[] = [
   {
-    label: 'Pay Greenfield School (approved payee)',
+    label: 'Pay Halden Building Supplies (approved payee)',
     result: 'allowed',
     rule: 'The payee is on the approved list and the pot has enough balance.',
   },
   {
-    label: 'Pay City Clinic (approved payee)',
+    label: 'Pay Brightline Electrical (approved payee)',
     result: 'allowed',
     rule: 'The payee is on the approved list and the pot has enough balance.',
   },
   {
-    label: "Pay the recipient's own wallet",
+    label: "Pay the contractor's own wallet",
     result: 'blocked',
-    rule: 'BeneficiaryCannotBePayee — the recipient can\'t be a payee of this pot.',
+    rule: "BeneficiaryCannotBePayee — the recipient can't be a payee of this pot.",
   },
   {
     label: 'Pay an unknown address',
@@ -37,7 +38,7 @@ const TESTS: RuleTest[] = [
     rule: 'PayeeNotApproved — only approved payees can be paid.',
   },
   {
-    label: `Pay 999 USDC (more than the ${BALANCE_USDC} USDC balance)`,
+    label: `Pay 9,999 USDC (more than the ${BALANCE_USDC} USDC balance)`,
     result: 'blocked',
     rule: 'InsufficientBalance — amount exceeds the pot balance.',
   },
@@ -73,14 +74,14 @@ export default function LandingTryRules() {
           {/* Pot header */}
           <div className="border-b border-[var(--line)] bg-[var(--accent-soft)] px-5 py-4">
             <p className="text-xs font-semibold text-[var(--accent)] uppercase tracking-wider mb-1">Example pot</p>
-            <p className="text-sm font-semibold text-[var(--ink)]">School fees — Term 1</p>
+            <p className="text-sm font-semibold text-[var(--ink)]">Office fit-out · Phase 1</p>
             <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1 text-xs text-[var(--ink-2)]">
               <span>Funder: <span className="font-mono">{FUNDER}</span></span>
               <span>Recipient: <span className="font-mono">{RECIPIENT}</span></span>
               <span>Balance: <span className="font-semibold">{BALANCE_USDC} USDC</span></span>
             </div>
             <div className="mt-1.5 flex gap-3 text-xs text-[var(--muted)]">
-              <span>Approved: <span className="text-[var(--success)]">Greenfield School</span>, <span className="text-[var(--success)]">City Clinic</span></span>
+              <span>Approved: <span className="text-[var(--success)]">Halden Building Supplies</span>, <span className="text-[var(--success)]">Brightline Electrical</span></span>
             </div>
           </div>
 

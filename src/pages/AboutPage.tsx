@@ -5,7 +5,7 @@
 import SiteHeader from '@/components/site/SiteHeader'
 import SiteFooter from '@/components/site/SiteFooter'
 import { Home, Users, Award, Briefcase, Github, ExternalLink } from 'lucide-react'
-import { EARMARK_CHAIN, EARMARK_ADDRESS } from '@/earmarkConfig'
+import { EARMARK_CHAIN, EARMARK_ADDRESS, EARMARK_CHAIN_ID } from '@/earmarkConfig'
 
 interface Props {
   onSend: () => void
@@ -16,10 +16,10 @@ interface Props {
 }
 
 const USE_CASES = [
-  { Icon: Home,     title: 'Money sent home',             desc: 'School fees, rent, and medical bills paid directly to the institution — not to an intermediary.' },
+  { Icon: Briefcase,title: 'Supplier and project budgets', desc: 'A project budget that can only be spent at the approved suppliers, with unspent funds returning to the funder.' },
   { Icon: Users,    title: 'Staff allowances and per diems', desc: 'Field teams spend only at approved vendors; managers see a verifiable record of every payment.' },
   { Icon: Award,    title: 'Grants and scholarships',      desc: 'Disbursements tied to specific recipients and institutions, with a public audit trail.' },
-  { Icon: Briefcase,title: 'Supplier and project budgets', desc: 'A project budget that can only be spent at the approved suppliers, with unspent funds returning to the funder.' },
+  { Icon: Home,     title: 'Money sent home',             desc: 'School fees, rent, and medical bills paid directly to the institution — not to an intermediary.' },
 ]
 
 const ROADMAP = [
@@ -133,7 +133,16 @@ export default function AboutPage({ onSend, onSent, onReceived, onHow, onBack }:
                 </a>
                 {' '}— Circle's onchain app builder. The Solidity contract, its 61 unit tests,
                 the deployment scripts, and this application were all produced through Arc Studio
-                and deployed on Arc Testnet.
+                and deployed on{' '}
+                <a
+                  href={`${EARMARK_CHAIN.explorerBase}/address/${EARMARK_ADDRESS}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-[var(--accent)] hover:underline focus-visible:outline-2 focus-visible:outline-[var(--focus)] rounded"
+                >
+                  {EARMARK_CHAIN_ID === 5042 ? 'Arc mainnet' : 'Arc Testnet'}
+                </a>
+                .
               </p>
               <p>
                 The contract has no owner, no admin key, no upgrade proxy, and no fee mechanism.

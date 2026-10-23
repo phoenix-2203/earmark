@@ -4,7 +4,7 @@ import { ChevronDown } from 'lucide-react'
 const FAQS = [
   {
     q: 'What is a pot?',
-    a: 'A pot is a fixed amount of USDC set aside for one specific purpose — for example, school fees for one term, or a contractor\'s retainer for one project. Money in a pot can only be spent at the approved payees the funder chose; any unspent balance returns to the funder after the end date.',
+    a: "A pot is a fixed amount of USDC set aside for one specific purpose — for example, a contractor's materials budget for one project, or a grant for one research programme. Money in a pot can only be spent at the approved payees the funder chose; any unspent balance returns to the funder after the end date.",
   },
   {
     q: 'Who can the recipient pay?',
@@ -32,7 +32,7 @@ const FAQS = [
   },
   {
     q: 'Do I need crypto experience to use Earmark?',
-    a: 'Today you need a crypto wallet (such as MetaMask) with USDC on Arc Testnet. We are working on Google sign-in for recipients and payees so they can use Earmark without setting up a wallet — that is on the roadmap but not yet available.',
+    a: 'Today you need a crypto wallet (such as MetaMask) with USDC on Arc. We are working on Google sign-in for recipients and payees so they can use Earmark without setting up a wallet — that is on the roadmap but not yet available.',
   },
 ]
 

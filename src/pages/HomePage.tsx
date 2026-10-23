@@ -1,13 +1,12 @@
 /**
  * HomePage — the public landing page.
- * Composed of section components; uses SiteHeader + SiteFooter.
+ * Order: Hero → In 30 seconds → Who it's for → How it's different →
+ *        Try the rules → Live on Arc → Why Arc → Safety → FAQ → CTA
  */
 import SiteHeader        from '@/components/site/SiteHeader'
 import SiteFooter        from '@/components/site/SiteFooter'
 import LandingHero       from '@/components/site/LandingHero'
 import LandingIn30Seconds from '@/components/site/LandingIn30Seconds'
-import LandingProblem    from '@/components/site/LandingProblem'
-import LandingHow        from '@/components/site/LandingHow'
 import LandingDifferent  from '@/components/site/LandingDifferent'
 import LandingTryRules   from '@/components/site/LandingTryRules'
 import LandingUseCases   from '@/components/site/LandingUseCases'
@@ -32,11 +31,9 @@ export default function HomePage({ onSend, onSent, onReceived, onHow, onAbout }:
       <main>
         <LandingHero       onSend={onSend} />
         <LandingIn30Seconds />
-        <LandingProblem />
-        <LandingHow />
+        <LandingUseCases />
         <LandingDifferent />
         <LandingTryRules />
-        <LandingUseCases />
         <LandingLiveOnArc />
         <LandingWhyArc />
         <LandingSafety />

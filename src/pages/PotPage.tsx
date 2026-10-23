@@ -643,12 +643,12 @@ function AddPayeeForm({ potId, pot, payees, onDone }: { potId: bigint; pot: Pot;
     <div className="space-y-3 rounded-card border border-[var(--line)] bg-[var(--surface)] p-4">
       <p className="text-xs font-semibold text-[var(--ink)]">Add an approved payee</p>
       <div>
-        <label className="mb-1 block text-xs text-[var(--muted)]">Label (e.g. Greenfield School)</label>
+        <label className="mb-1 block text-xs text-[var(--muted)]">Label (e.g. Halden Building Supplies)</label>
         <input
           value={label}
           onChange={(e) => setLabel(e.target.value)}
           maxLength={48}
-          placeholder="Greenfield School"
+          placeholder="Halden Building Supplies"
           className="w-full rounded-input border border-[var(--line)] bg-[var(--surface-2)] px-3 py-2 text-sm text-[var(--ink)] placeholder:text-[var(--muted)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)]"
         />
       </div>
@@ -1002,7 +1002,7 @@ function PayForm({ potId, payees, balance, onDone }: { potId: bigint; payees: Pa
         <input
           value={memo}
           onChange={(e) => setMemo(e.target.value.slice(0, 140))}
-          placeholder="e.g. Term 1 fees, invoice 0042"
+          placeholder="e.g. PO-1042 · materials"
           className="w-full rounded-input border border-[var(--line)] bg-[var(--surface-2)] px-3 py-2 text-sm text-[var(--ink)] placeholder:text-[var(--muted)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)]"
         />
       </div>
@@ -1095,11 +1095,11 @@ function RequestPayeeForm({ potId, pot, payees, onDone }: { potId: bigint; pot: 
     <div className="space-y-3 rounded-card border border-[var(--line)] bg-[var(--surface)] p-4">
       <p className="text-xs font-semibold text-[var(--ink)]">Ask to add a payee</p>
       <div>
-        <label className="mb-1 block text-xs text-[var(--muted)]">Label (e.g. City Medical Clinic)</label>
+        <label className="mb-1 block text-xs text-[var(--muted)]">Label (e.g. Halden Building Supplies)</label>
         <input
           value={label}
           onChange={(e) => setLabel(e.target.value.slice(0, 48))}
-          placeholder="City Medical Clinic"
+          placeholder="Halden Building Supplies"
           className="w-full rounded-input border border-[var(--line)] bg-[var(--surface-2)] px-3 py-2 text-sm text-[var(--ink)] placeholder:text-[var(--muted)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)]"
         />
       </div>

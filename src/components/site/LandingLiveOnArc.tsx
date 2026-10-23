@@ -195,7 +195,7 @@ export default function LandingLiveOnArc() {
           Real data, straight from the chain.
         </h2>
         <p className="mb-8 text-center text-sm text-[var(--ink-2)]">
-          Every number below is read from Arc Testnet — no database, no backend.
+          Every number below is read from {EARMARK_CHAIN.name} — no database, no backend.
         </p>
 
         {/* Stats bar — show "—" until data loads or on error */}

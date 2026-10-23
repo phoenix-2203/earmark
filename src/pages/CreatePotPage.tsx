@@ -409,7 +409,7 @@ export default function CreatePotPage({ onBack, onSuccess }: Props) {
         <Card padding="lg" className="space-y-4">
           <Field
             label="What is it for?"
-            help="A short title, e.g. 'School fees — Term 1'."
+            help="A short title, e.g. 'Office fit-out · Phase 1'."
             error={errors.title}
           >
             {({ id, ...rest }) => (
@@ -421,7 +421,7 @@ export default function CreatePotPage({ onBack, onSuccess }: Props) {
                   setTitle(e.target.value)
                   if (errors.title) setErrors((er) => { const ne = { ...er }; delete ne.title; return ne })
                 }}
-                placeholder="School fees — Term 1"
+                placeholder="Office fit-out · Phase 1"
                 maxLength={64}
                 className="w-full rounded-input border border-[var(--line)] bg-[var(--surface-2)] px-3 py-2.5 text-sm text-[var(--ink)] placeholder:text-[var(--muted)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)]"
               />
@@ -536,11 +536,11 @@ export default function CreatePotPage({ onBack, onSuccess }: Props) {
                 )}
               </div>
               <div>
-                <label className="mb-1 block text-xs text-[var(--muted)]">Label (e.g. Greenfield School)</label>
+                <label className="mb-1 block text-xs text-[var(--muted)]">Label (e.g. Halden Building Supplies)</label>
                 <input
                   value={payee.label}
                   onChange={(e) => setPayees((p) => p.map((r, j) => j === i ? { ...r, label: e.target.value } : r))}
-                  placeholder="Greenfield School"
+                  placeholder="Halden Building Supplies"
                   maxLength={48}
                   className="w-full rounded-input border border-[var(--line)] bg-[var(--surface)] px-3 py-2 text-sm text-[var(--ink)] placeholder:text-[var(--muted)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)]"
                 />

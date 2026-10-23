@@ -14,7 +14,6 @@ interface Props {
 
 const NAV_LINKS = [
   { label: 'In 30 seconds', href: '#in-30-seconds' },
-  { label: 'How it works',  href: '#how'            },
   { label: 'Use cases',     href: '#use-cases'      },
   { label: 'Live on Arc',   href: '#live'           },
   { label: 'Safety',        href: '#safety'         },
@@ -84,6 +83,12 @@ export default function SiteHeader({ onOpenApp, onHow, onAbout }: Props) {
             onClick={onHow}
             className="rounded px-3 py-1.5 text-sm font-medium text-[var(--ink-2)] hover:bg-[var(--surface-2)] hover:text-[var(--ink)] focus-visible:outline-2 focus-visible:outline-[var(--focus)] transition-colors"
           >
+            How it works
+          </button>
+          <button
+            onClick={onAbout}
+            className="rounded px-3 py-1.5 text-sm font-medium text-[var(--ink-2)] hover:bg-[var(--surface-2)] hover:text-[var(--ink)] focus-visible:outline-2 focus-visible:outline-[var(--focus)] transition-colors"
+          >
             About
           </button>
         </nav>
@@ -135,6 +140,13 @@ export default function SiteHeader({ onOpenApp, onHow, onAbout }: Props) {
                   </button>
                 ))}
                 <div className="my-1 border-t border-[var(--line)]" />
+                <button
+                  role="menuitem"
+                  onClick={() => { setOpen(false); onHow() }}
+                  className="block w-full px-4 py-2.5 text-left text-sm font-medium text-[var(--ink-2)] hover:bg-[var(--surface-2)] hover:text-[var(--ink)] focus-visible:outline-2 focus-visible:outline-[var(--focus)] transition-colors"
+                >
+                  How it works
+                </button>
                 <button
                   role="menuitem"
                   onClick={() => { setOpen(false); onAbout() }}
