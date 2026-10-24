@@ -5,6 +5,7 @@
  */
 import { ArrowRight } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
+import { PRIVY_ENABLED } from '@/lib/privy'
 
 interface Props {
   onSend: () => void
@@ -45,10 +46,12 @@ export default function LandingHero({ onSend }: Props) {
 
         {/* Trust line */}
         <p className="text-xs text-[var(--muted)] flex flex-wrap gap-x-4 gap-y-1 justify-center">
-          <span className="flex items-center gap-1">
-            <span className="size-1.5 rounded-full bg-[var(--success)] inline-block" aria-hidden />
-            Sign in with Google
-          </span>
+          {PRIVY_ENABLED && (
+            <span className="flex items-center gap-1">
+              <span className="size-1.5 rounded-full bg-[var(--success)] inline-block" aria-hidden />
+              Sign in with Google
+            </span>
+          )}
           <span className="flex items-center gap-1">
             <span className="size-1.5 rounded-full bg-[var(--accent)] inline-block" aria-hidden />
             Live on Arc

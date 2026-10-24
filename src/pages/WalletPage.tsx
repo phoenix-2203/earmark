@@ -46,8 +46,8 @@ export default function WalletPage({ onBack, onSignIn }: Props) {
       <PageShell onBack={onBack}>
         <Card padding="lg" className="text-center space-y-4">
           <h1 className="text-xl font-semibold text-[var(--ink)]">My Earmark wallet</h1>
-          <p className="text-sm text-[var(--ink-2)]">Sign in with Google or your email to access your permanent Earmark wallet.</p>
-          <Button size="lg" className="w-full" onClick={onSignIn}>Sign in</Button>
+          <p className="text-sm text-[var(--ink-2)]">Sign-in isn't enabled on this site.</p>
+          <Button size="md" variant="secondary" className="w-full" onClick={onBack}>Go home</Button>
         </Card>
       </PageShell>
     )

@@ -1,4 +1,5 @@
 import { ArrowLeft, GraduationCap, CheckCircle2, ReceiptText, ExternalLink, ShieldCheck } from 'lucide-react'
+import { PRIVY_ENABLED } from '@/lib/privy'
 import { Button } from '@/components/ui/Button'
 import SiteHeader from '@/components/site/SiteHeader'
 import SiteFooter from '@/components/site/SiteFooter'
@@ -216,19 +217,23 @@ export default function HowItWorksPage({ onBack, onSend, onAbout }: Props) {
                 Never use contact details from the person asking you to add the payee.
               </p>
             </div>
-            <div className="rounded-card border border-[var(--line)] bg-[var(--surface)] p-4 shadow-card">
-              <p className="text-sm font-semibold text-[var(--ink)] mb-2">3) Pay by email</p>
-              <p className="text-sm text-[var(--ink-2)] mb-2 text-pretty">
-                Type the payee's email in any address field. Earmark creates a permanent wallet for that address; only whoever controls that inbox can sign in and use the money. Business addresses (e.g. <code className="font-mono text-xs">billing@example.com</code>) show a green badge; personal addresses (Gmail, Outlook…) show a caution badge — confirm it's really their email.
-              </p>
-              <p className="text-xs text-[var(--warning)] font-medium">Use a business or official email, not a personal one, where possible.</p>
-            </div>
+            {PRIVY_ENABLED && (
+              <div className="rounded-card border border-[var(--line)] bg-[var(--surface)] p-4 shadow-card">
+                <p className="text-sm font-semibold text-[var(--ink)] mb-2">3) Pay by email</p>
+                <p className="text-sm text-[var(--ink-2)] mb-2 text-pretty">
+                  Type the payee's email in any address field. Earmark creates a permanent wallet for that address; only whoever controls that inbox can sign in and use the money. Business addresses (e.g. <code className="font-mono text-xs">billing@example.com</code>) show a green badge; personal addresses (Gmail, Outlook…) show a caution badge — confirm it's really their email.
+                </p>
+                <p className="text-xs text-[var(--warning)] font-medium">Use a business or official email, not a personal one, where possible.</p>
+              </div>
+            )}
             <div className="rounded-card border border-[var(--line)] bg-[var(--surface)] p-4 shadow-card">
               <p className="text-sm font-semibold text-[var(--ink)] mb-1">What verification proves and what it doesn't</p>
               <ul className="list-disc pl-5 space-y-1 text-sm text-[var(--ink-2)]">
                 <li><strong>Domain:</strong> the person controlling that domain linked this wallet address. Doesn't prove the domain belongs to the right company — confirm the domain separately.</li>
                 <li><strong>Wallet confirmation:</strong> someone who controls the payee's private key signed your request. The funder's responsibility is ensuring they're contacting the right person.</li>
-                <li><strong>Email:</strong> only whoever controls that inbox can access the funds. Doesn't prove the email belongs to the intended payee — confirm separately.</li>
+                {PRIVY_ENABLED && (
+                  <li><strong>Email:</strong> only whoever controls that inbox can access the funds. Doesn't prove the email belongs to the intended payee — confirm separately.</li>
+                )}
                 <li>DNS records can change. The badge reflects the record at the time you check.</li>
               </ul>
             </div>

@@ -1,7 +1,8 @@
 /** Section 9 — FAQ accordion using <details>/<summary> */
 import { ChevronDown } from 'lucide-react'
+import { PRIVY_ENABLED } from '@/lib/privy'
 
-const FAQS = [
+const FAQS_BASE = [
   {
     q: 'What is a pot?',
     a: "A pot is a fixed amount of USDC set aside for one specific purpose — for example, a contractor's materials budget for one project, or a grant for one research programme. Money in a pot can only be spent at the approved payees the funder chose; any unspent balance returns to the funder after the end date.",
@@ -36,13 +37,20 @@ const FAQS = [
   },
   {
     q: 'Do I need crypto experience?',
-    a: 'No. Sign in with Google or your email and Earmark creates a wallet for you. You can also connect your own wallet.',
+    a: PRIVY_ENABLED
+      ? 'No. Sign in with Google or your email and Earmark creates a wallet for you. You can also connect your own wallet.'
+      : 'No. Connect any EVM wallet (MetaMask, Coinbase Wallet, etc.) to get started.',
   },
+]
+
+const PRIVY_FAQS = [
   {
     q: 'Can I pay someone who isn\'t on Earmark yet?',
     a: 'Yes — type their email. Earmark creates their wallet; only whoever controls that inbox can sign in and use the money.',
   },
 ]
+
+const FAQS = PRIVY_ENABLED ? [...FAQS_BASE, ...PRIVY_FAQS] : FAQS_BASE
 
 export default function LandingFaq() {
   return (

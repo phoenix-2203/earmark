@@ -6,6 +6,7 @@ import SiteHeader from '@/components/site/SiteHeader'
 import SiteFooter from '@/components/site/SiteFooter'
 import { Home, Users, Award, Briefcase, Github, ExternalLink } from 'lucide-react'
 import { EARMARK_CHAIN, EARMARK_ADDRESS, EARMARK_CHAIN_ID } from '@/earmarkConfig'
+import { PRIVY_ENABLED } from '@/lib/privy'
 
 interface Props {
   onSend: () => void
@@ -179,14 +180,18 @@ export default function AboutPage({ onSend, onSent, onReceived, onHow, onBack }:
               <p>
                 Earmark stores nothing itself. All pot data — recipients, payees, payments — is written directly to the Arc smart contract and is public and permanent on-chain.
               </p>
-              <p>
-                Sign-in and embedded wallets are provided by{' '}
-                <a href="https://privy.io" target="_blank" rel="noopener noreferrer" className="text-[var(--accent)] hover:underline focus-visible:outline-2 focus-visible:outline-[var(--focus)] rounded">Privy</a>.
-                {' '}Privy stores the association between your email/Google account and your wallet. Earmark does not have access to your private key; Privy manages it on your behalf.
-              </p>
-              <p>
-                The Earmark API only looks up or creates the wallet for an email you type when adding a payee — no emails or names are stored server-side after the response.
-              </p>
+              {PRIVY_ENABLED && (
+                <>
+                  <p>
+                    Sign-in and embedded wallets are provided by{' '}
+                    <a href="https://privy.io" target="_blank" rel="noopener noreferrer" className="text-[var(--accent)] hover:underline focus-visible:outline-2 focus-visible:outline-[var(--focus)] rounded">Privy</a>.
+                    {' '}Privy stores the association between your email/Google account and your wallet. Earmark does not have access to your private key; Privy manages it on your behalf.
+                  </p>
+                  <p>
+                    The Earmark API only looks up or creates the wallet for an email you type when adding a payee — no emails or names are stored server-side after the response.
+                  </p>
+                </>
+              )}
             </div>
           </div>
         </section>
