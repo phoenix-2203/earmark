@@ -32,7 +32,7 @@ import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
 import { StatusBadge } from '@/components/ui/StatusBadge'
 import { AddressChip } from '@/components/ui/AddressChip'
-import { AddressInput } from '@/components/ui/AddressInput'
+import { EmailAddressInput } from '@/components/ui/EmailAddressInput'
 import { AmountInput } from '@/components/ui/AmountInput'
 import { Field } from '@/components/ui/Field'
 import { Dialog } from '@/components/ui/Dialog'
@@ -42,6 +42,7 @@ import {
   localDateToExpiry, formatExpiry, isValidUsdcAmount,
 } from '@/utils/format'
 import type { Pot, PayeeEntry } from '@/earmarkTypes'
+import type { PayeeWalletResponse } from '@/lib/emailPayee'
 import type { Status } from '@/components/ui/StatusBadge'
 import PayeeBadge from '@/components/PayeeBadge'
 import AskPayeeToConfirmButton from '@/components/AskPayeeToConfirmButton'
@@ -624,8 +625,9 @@ function TopUpForm({ potId, onDone }: { potId: bigint; onDone: () => void }) {
 // ── AddPayeeForm ──────────────────────────────────────────────────────────────
 function AddPayeeForm({ potId, pot, payees, onDone }: { potId: bigint; pot: Pot; payees: PayeeEntry[]; onDone: () => void }) {
   const { address: funderAddress } = useAccount()
-  const [rawAddr, setRawAddr] = useState('')
+  const [addrRaw, setAddrRaw] = useState('')
   const [checksumAddr, setChecksumAddr] = useState<`0x${string}` | null>(null)
+  const [emailData, setEmailData] = useState<PayeeWalletResponse | undefined>()
   const [label, setLabel] = useState('')
   const [website, setWebsite] = useState('')
   const [valErr, setValErr] = useState<string | undefined>()
@@ -668,35 +670,56 @@ function AddPayeeForm({ potId, pot, payees, onDone }: { potId: bigint; pot: Pot;
         />
       </div>
       <div>
-        <label className="mb-1 block text-xs text-[var(--muted)]">Wallet address</label>
-        <AddressInput value={rawAddr} onChange={(raw, cs) => { setRawAddr(raw); setChecksumAddr(cs) }} placeholder="0x…" />
-      </div>
-      <div>
-        <label className="mb-1 flex items-center gap-1 text-xs text-[var(--muted)]">
-          Website (optional)
-          <a href="#/how" className="ml-1 text-[var(--accent)] hover:underline inline-flex items-center gap-0.5 focus-visible:outline-2 focus-visible:outline-[var(--focus)] rounded" title="How domain verification works">
-            <HelpCircle className="size-3" aria-hidden /> How?
-          </a>
-        </label>
-        <input
-          value={website}
-          onChange={(e) => setWebsite(e.target.value)}
-          placeholder="haldensupplies.com"
-          autoComplete="off"
-          className="w-full rounded-input border border-[var(--line)] bg-[var(--surface-2)] px-3 py-2 text-sm text-[var(--ink)] placeholder:text-[var(--muted)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)]"
+        <label className="mb-1 block text-xs text-[var(--muted)]">Wallet address or email</label>
+        <EmailAddressInput
+          value={addrRaw}
+          funder={funderAddress ?? undefined}
+          onChange={(result) => {
+            setAddrRaw(result.raw)
+            setChecksumAddr(result.checksummed)
+            setEmailData(result.emailData)
+            // Auto-fill label from email if still empty
+            if (result.emailData && !label.trim()) setLabel(result.emailData.email)
+          }}
+          placeholder="0x… or name@company.com"
         />
-        {checksumAddr && (
-          <div className="mt-1 space-y-1">
-            <PayeeBadge domain={domain} address={checksumAddr} funder={funderAddress ?? undefined} />
-            <AskPayeeToConfirmButton
-              payee={checksumAddr}
-              name={label.trim() || 'Payee'}
-              purpose={pot.title}
-              disabled={!label.trim()}
-            />
-          </div>
-        )}
       </div>
+      {!emailData && (
+        <div>
+          <label className="mb-1 flex items-center gap-1 text-xs text-[var(--muted)]">
+            Website (optional)
+            <a href="#/how" className="ml-1 text-[var(--accent)] hover:underline inline-flex items-center gap-0.5 focus-visible:outline-2 focus-visible:outline-[var(--focus)] rounded" title="How domain verification works">
+              <HelpCircle className="size-3" aria-hidden /> How?
+            </a>
+          </label>
+          <input
+            value={website}
+            onChange={(e) => setWebsite(e.target.value)}
+            placeholder="haldensupplies.com"
+            autoComplete="off"
+            className="w-full rounded-input border border-[var(--line)] bg-[var(--surface-2)] px-3 py-2 text-sm text-[var(--ink)] placeholder:text-[var(--muted)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)]"
+          />
+          {checksumAddr && (
+            <div className="mt-1 space-y-1">
+              <PayeeBadge domain={domain} address={checksumAddr} funder={funderAddress ?? undefined} />
+              <AskPayeeToConfirmButton
+                payee={checksumAddr}
+                name={label.trim() || 'Payee'}
+                purpose={pot.title}
+                disabled={!label.trim()}
+              />
+            </div>
+          )}
+        </div>
+      )}
+      {emailData && checksumAddr && (
+        <PayeeBadge
+          address={checksumAddr}
+          email={emailData.email}
+          emailKind={emailData.emailKind}
+          funder={funderAddress ?? undefined}
+        />
+      )}
       {err && <p role="alert" className="text-xs text-danger">{err}</p>}
       {action.txHash && <TxStatus state={action.state} txHash={action.txHash} />}
       <div className="flex gap-2">
@@ -1112,8 +1135,9 @@ function PayForm({ potId, payees, balance, onDone }: { potId: bigint; payees: Pa
 // ── RequestPayeeForm ──────────────────────────────────────────────────────────
 function RequestPayeeForm({ potId, pot, payees, onDone }: { potId: bigint; pot: Pot; payees: PayeeEntry[]; onDone: () => void }) {
   const { address: connectedAddress } = useAccount()
-  const [rawAddr, setRawAddr] = useState('')
+  const [addrRaw, setAddrRaw] = useState('')
   const [checksumAddr, setChecksumAddr] = useState<`0x${string}` | null>(null)
+  const [emailData, setEmailData] = useState<PayeeWalletResponse | undefined>()
   const [label, setLabel] = useState('')
   const [website, setWebsite] = useState('')
   const [reason, setReason] = useState('')
@@ -1164,29 +1188,48 @@ function RequestPayeeForm({ potId, pot, payees, onDone }: { potId: bigint; pot: 
         />
       </div>
       <div>
-        <label className="mb-1 block text-xs text-[var(--muted)]">Wallet address</label>
-        <AddressInput value={rawAddr} onChange={(raw, cs) => { setRawAddr(raw); setChecksumAddr(cs) }} placeholder="0x…" />
-      </div>
-      <div>
-        <label className="mb-1 flex items-center gap-1 text-xs text-[var(--muted)]">
-          Website (optional)
-          <a href="#/how" className="ml-1 text-[var(--accent)] hover:underline inline-flex items-center gap-0.5 focus-visible:outline-2 focus-visible:outline-[var(--focus)] rounded" title="How domain verification works">
-            <HelpCircle className="size-3" aria-hidden /> How?
-          </a>
-        </label>
-        <input
-          value={website}
-          onChange={(e) => setWebsite(e.target.value)}
-          placeholder="haldensupplies.com"
-          autoComplete="off"
-          className="w-full rounded-input border border-[var(--line)] bg-[var(--surface-2)] px-3 py-2 text-sm text-[var(--ink)] placeholder:text-[var(--muted)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)]"
+        <label className="mb-1 block text-xs text-[var(--muted)]">Wallet address or email</label>
+        <EmailAddressInput
+          value={addrRaw}
+          funder={connectedAddress ?? undefined}
+          onChange={(result) => {
+            setAddrRaw(result.raw)
+            setChecksumAddr(result.checksummed)
+            setEmailData(result.emailData)
+            if (result.emailData && !label.trim()) setLabel(result.emailData.email)
+          }}
+          placeholder="0x… or name@company.com"
         />
-        {checksumAddr && (
-          <div className="mt-1">
-            <PayeeBadge domain={domain} address={checksumAddr} />
-          </div>
-        )}
       </div>
+      {emailData && checksumAddr && (
+        <PayeeBadge
+          address={checksumAddr}
+          email={emailData.email}
+          emailKind={emailData.emailKind}
+        />
+      )}
+      {!emailData && (
+        <div>
+          <label className="mb-1 flex items-center gap-1 text-xs text-[var(--muted)]">
+            Website (optional)
+            <a href="#/how" className="ml-1 text-[var(--accent)] hover:underline inline-flex items-center gap-0.5 focus-visible:outline-2 focus-visible:outline-[var(--focus)] rounded" title="How domain verification works">
+              <HelpCircle className="size-3" aria-hidden /> How?
+            </a>
+          </label>
+          <input
+            value={website}
+            onChange={(e) => setWebsite(e.target.value)}
+            placeholder="haldensupplies.com"
+            autoComplete="off"
+            className="w-full rounded-input border border-[var(--line)] bg-[var(--surface-2)] px-3 py-2 text-sm text-[var(--ink)] placeholder:text-[var(--muted)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)]"
+          />
+          {checksumAddr && (
+            <div className="mt-1">
+              <PayeeBadge domain={domain} address={checksumAddr} />
+            </div>
+          )}
+        </div>
+      )}
       <div>
         <label className="mb-1 block text-xs text-[var(--muted)]">Reason (optional, max 140 chars)</label>
         <input
