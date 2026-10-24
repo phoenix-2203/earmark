@@ -18,7 +18,7 @@ import { writeContract, waitForTransactionReceipt } from '@wagmi/core'
 import { Copy, ExternalLink, Download, QrCode, ArrowLeft, AlertTriangle, Send } from 'lucide-react'
 import QRCode from 'qrcode'
 import { toast } from 'sonner'
-import { usePrivy } from '@privy-io/react-auth'
+import { usePrivy, useExportWallet } from '@privy-io/react-auth'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
 import { Field } from '@/components/ui/Field'
@@ -58,7 +58,13 @@ export default function WalletPage({ onBack, onSignIn }: Props) {
 /** Inner component — only rendered when PRIVY_ENABLED. usePrivy is called unconditionally. */
 function PrivyWalletContent({ onBack, onSignIn }: Props) {
   const privy = usePrivy()
+  const { exportWallet } = useExportWallet()
   const { address: connectedAddress } = useAccount()
+
+  // Detect the Privy-managed embedded wallet (walletClientType === 'privy')
+  const embeddedWallet = privy.user?.linkedAccounts?.find(
+    (a) => a.type === 'wallet' && 'walletClientType' in a && a.walletClientType === 'privy',
+  ) as { address: string } | undefined
 
   const { data: usdcBalance, refetch: refetchBalance } = useReadContract({
     address: USDC_ADDRESS,
@@ -146,8 +152,11 @@ function PrivyWalletContent({ onBack, onSignIn }: Props) {
   const [showExportWarning, setShowExportWarning] = useState(false)
 
   function handleExport() {
-    // Export is handled via the Privy account popup (no direct API in SDK v3).
-    toast.info('To export your key, open your wallet settings in the Privy account popup.')
+    if (!embeddedWallet?.address) return
+    void exportWallet({ address: embeddedWallet.address }).catch((err: unknown) => {
+      const msg = err instanceof Error ? err.message : String(err)
+      toast.error(msg.includes('cancel') || msg.includes('4001') ? 'Cancelled.' : 'Export failed. Try again.')
+    })
   }
 
   // ── Not ready ──
@@ -300,40 +309,42 @@ function PrivyWalletContent({ onBack, onSignIn }: Props) {
         )}
       </Card>
 
-      {/* ── Export private key ── */}
-      <Card padding="lg" className="space-y-3 mb-4">
-        <div className="flex items-center gap-2">
-          <Download className="size-4 text-[var(--muted)]" aria-hidden />
-          <h2 className="text-sm font-semibold text-[var(--ink)]">Export private key</h2>
-        </div>
+      {/* ── Export private key — only for Privy embedded wallets ── */}
+      {embeddedWallet && (
+        <Card padding="lg" className="space-y-3 mb-4">
+          <div className="flex items-center gap-2">
+            <Download className="size-4 text-[var(--muted)]" aria-hidden />
+            <h2 className="text-sm font-semibold text-[var(--ink)]">Export private key</h2>
+          </div>
 
-        {!showExportWarning ? (
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => setShowExportWarning(true)}
-          >
-            Show export option
-          </Button>
-        ) : (
-          <div className="space-y-3">
-            <div className="flex gap-2 rounded-card border border-[#F5C6C3] bg-[#FDECEC] p-3">
-              <AlertTriangle className="mt-0.5 size-4 shrink-0 text-danger" aria-hidden />
-              <p className="text-xs text-danger leading-relaxed">
-                <strong>Anyone with this key controls your money.</strong> Never share it with anyone.
-                Only export it to import into a wallet app you trust.
-              </p>
-            </div>
+          {!showExportWarning ? (
             <Button
               variant="secondary"
               size="sm"
-              onClick={() => void handleExport()}
+              onClick={() => setShowExportWarning(true)}
             >
-              Export private key
+              Show export option
             </Button>
-          </div>
-        )}
-      </Card>
+          ) : (
+            <div className="space-y-3">
+              <div className="flex gap-2 rounded-card border border-[#F5C6C3] bg-[#FDECEC] p-3">
+                <AlertTriangle className="mt-0.5 size-4 shrink-0 text-danger" aria-hidden />
+                <p className="text-xs text-danger leading-relaxed">
+                  <strong>Anyone with this key controls your money.</strong> Never share it with anyone.
+                  Only export it to import into a wallet app you trust.
+                </p>
+              </div>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={handleExport}
+              >
+                Export private key
+              </Button>
+            </div>
+          )}
+        </Card>
+      )}
 
       {/* ── Sign out ── */}
       <div className="text-center">
