@@ -1,0 +1,27 @@
+[Unit]
+Description=Earmark payee-wallet API
+After=network.target
+
+[Service]
+Type=simple
+User=doorstep
+EnvironmentFile=/etc/earmark-api.env
+ExecStart=/usr/bin/env node /home/doorstep/earmark/server/earmark-api.mjs
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=earmark-api
+
+# Hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+
+[Install]
+WantedBy=multi-user.target
