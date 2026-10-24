@@ -5,14 +5,16 @@
  * Zero npm dependencies — uses node:http, node:crypto, and global fetch (Node 18+).
  *
  * Required env vars (server will exit if missing):
- *   PRIVY_APP_ID          — your Privy application ID
- *   PRIVY_APP_SECRET      — your Privy application secret
- *   PRIVY_VERIFICATION_KEY — ES256 public key PEM; literal \n is accepted
+ *   PRIVY_APP_ID     — your Privy application ID
+ *   PRIVY_APP_SECRET — your Privy application secret
  *
  * Optional env vars:
- *   PORT                  — listen port (default 8787)
- *   PRIVY_API_BASE        — override Privy auth base (default https://auth.privy.io)
- *   PRIVY_API_V1_BASE     — override Privy v1 base  (default https://api.privy.io)
+ *   PRIVY_VERIFICATION_KEY — ES256 public key PEM (used as an extra fallback key,
+ *                            kid "env"; literal \n is accepted). No longer required:
+ *                            keys are loaded automatically from Privy's JWKS endpoint.
+ *   PORT             — listen port (default 8787)
+ *   PRIVY_API_BASE   — override Privy auth base (default https://auth.privy.io)
+ *   PRIVY_API_V1_BASE — override Privy v1 base  (default https://api.privy.io)
  */
 
 import { createServer } from 'node:http'
@@ -102,7 +104,138 @@ const cleanupTimer = setInterval(() => {
 }, HOUR_MS)
 cleanupTimer.unref()
 
+// ─── JWKS key store ───────────────────────────────────────────────────────────
+
+/**
+ * Map from kid → CryptoKey (KeyObject from node:crypto).
+ * The special kid "env" holds the key from PRIVY_VERIFICATION_KEY when set.
+ * @type {Map<string, import('node:crypto').KeyObject>}
+ */
+const jwksKeys = new Map()
+
+/** Timestamp of the last JWKS fetch (used to throttle on-demand refreshes). */
+let jwksLastFetch = 0
+
+/** True while a JWKS fetch is already in flight (prevents parallel refreshes). */
+let jwksFetching = false
+
+const JWKS_REFRESH_INTERVAL_MS = 60 * 60 * 1000   // 1 hour
+const JWKS_ON_DEMAND_COOLDOWN_MS = 5 * 60 * 1000  // 5 minutes between on-demand refreshes
+
+/**
+ * Fetch Privy's JWKS and populate jwksKeys.
+ * Keeps only EC / P-256 (ES256) keys.
+ * Logs a warning on failure but does NOT throw — caller decides what to do.
+ */
+async function fetchJwks() {
+  if (jwksFetching) return
+  jwksFetching = true
+  const url = `${PRIVY_API_BASE}/api/v1/apps/${PRIVY_APP_ID}/jwks.json`
+
+  try {
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), 10_000)
+    let response
+    try {
+      response = await fetch(url, { signal: controller.signal })
+    } finally {
+      clearTimeout(timer)
+    }
+
+    if (!response.ok) {
+      process.stderr.write(`earmark-api: JWKS fetch HTTP ${response.status} — keeping existing keys\n`)
+      return
+    }
+
+    /** @type {{ keys?: unknown[] }} */
+    let jwks
+    try { jwks = await response.json() } catch {
+      process.stderr.write('earmark-api: JWKS response not valid JSON — keeping existing keys\n')
+      return
+    }
+
+    if (!Array.isArray(jwks?.keys)) {
+      process.stderr.write('earmark-api: JWKS missing keys array — keeping existing keys\n')
+      return
+    }
+
+    let imported = 0
+    for (const jwk of jwks.keys) {
+      if (
+        jwk == null ||
+        typeof jwk !== 'object' ||
+        jwk.kty !== 'EC' ||
+        jwk.crv !== 'P-256' ||
+        (jwk.alg !== undefined && jwk.alg !== 'ES256')
+      ) continue
+
+      const kid = typeof jwk.kid === 'string' && jwk.kid ? jwk.kid : `__no_kid_${imported}`
+      try {
+        const keyObject = createPublicKey({ key: jwk, format: 'jwk' })
+        jwksKeys.set(kid, keyObject)
+        imported++
+      } catch {
+        // Skip keys that fail to import — don't log the JWK value
+        process.stderr.write(`earmark-api: could not import JWKS key kid=${kid} — skipping\n`)
+      }
+    }
+
+    jwksLastFetch = Date.now()
+    process.stdout.write(`earmark-api: JWKS loaded ${imported} key(s)\n`)
+  } catch (err) {
+    process.stderr.write(`earmark-api: JWKS fetch failed (${err instanceof Error ? err.message : String(err)}) — keeping existing keys\n`)
+  } finally {
+    jwksFetching = false
+  }
+}
+
+/**
+ * Ensure JWKS are loaded; if the kid is unknown and the cooldown has passed,
+ * refresh once then retry.
+ * @param {string | undefined} kid
+ */
+async function ensureKeyForKid(kid) {
+  // If we have a key for this kid, nothing to do
+  if (kid !== undefined && jwksKeys.has(kid)) return
+
+  // If it's been long enough since the last fetch, try a fresh load
+  const age = Date.now() - jwksLastFetch
+  if (age >= JWKS_ON_DEMAND_COOLDOWN_MS) {
+    await fetchJwks()
+  }
+}
+
+// Add the env PEM key (kid "env") if provided — done once at module load
+if (PRIVY_VERIFICATION_KEY) {
+  try {
+    const envKey = createPublicKey(PRIVY_VERIFICATION_KEY)
+    jwksKeys.set('env', envKey)
+  } catch {
+    process.stderr.write('earmark-api: PRIVY_VERIFICATION_KEY is set but could not be parsed as a public key\n')
+  }
+}
+
 // ─── JWT verification ─────────────────────────────────────────────────────────
+
+/**
+ * Try to verify the signing input + signature with a single KeyObject.
+ * Returns true on success, false on failure.
+ * @param {import('node:crypto').KeyObject} keyObject
+ * @param {Buffer} signingInput
+ * @param {Buffer} signatureBytes
+ */
+function tryVerifyWithKey(keyObject, signingInput, signatureBytes) {
+  try {
+    return cryptoVerify(
+      'sha256',
+      signingInput,
+      { key: keyObject, dsaEncoding: 'ieee-p1363' },
+      signatureBytes,
+    )
+  } catch {
+    return false
+  }
+}
 
 /**
  * Decode and verify a Privy ES256 JWT.
@@ -110,7 +243,7 @@ cleanupTimer.unref()
  * @param {string} token
  * @returns {{ sub: string }}
  */
-function verifyPrivyJwt(token) {
+async function verifyPrivyJwt(token) {
   const parts = token.split('.')
   if (parts.length !== 3) throw new Error('malformed jwt')
 
@@ -120,17 +253,31 @@ function verifyPrivyJwt(token) {
   // Algorithm must be exactly ES256 — reject "none" and everything else
   if (headerJson.alg !== 'ES256') throw new Error('unexpected alg')
 
-  // Verify signature: ES256 = ECDSA P-256 with SHA-256, signature in IEEE P1363 format
-  const signingInput  = Buffer.from(`${parts[0]}.${parts[1]}`)
-  const signatureBytes = Buffer.from(parts[2], 'base64url')
-  const pubKey = createPublicKey(PRIVY_VERIFICATION_KEY)
+  const kid = typeof headerJson.kid === 'string' && headerJson.kid ? headerJson.kid : undefined
 
-  const valid = cryptoVerify(
-    'sha256',
-    signingInput,
-    { key: pubKey, dsaEncoding: 'ieee-p1363' },
-    signatureBytes,
-  )
+  // Ensure we have the most up-to-date key for this kid (at most one refresh per cooldown)
+  await ensureKeyForKid(kid)
+
+  const signingInput   = Buffer.from(`${parts[0]}.${parts[1]}`)
+  const signatureBytes = Buffer.from(parts[2], 'base64url')
+
+  let valid = false
+
+  if (kid !== undefined) {
+    // Token has a kid: use that specific key only
+    const keyObject = jwksKeys.get(kid)
+    if (!keyObject) throw new Error('unknown kid')
+    valid = tryVerifyWithKey(keyObject, signingInput, signatureBytes)
+  } else {
+    // No kid: try every known key (including "env")
+    for (const keyObject of jwksKeys.values()) {
+      if (tryVerifyWithKey(keyObject, signingInput, signatureBytes)) {
+        valid = true
+        break
+      }
+    }
+  }
+
   if (!valid) throw new Error('invalid signature')
 
   // Claims
@@ -332,7 +479,7 @@ async function handleRequest(req, res) {
 
     let payload
     try {
-      payload = verifyPrivyJwt(token)
+      payload = await verifyPrivyJwt(token)
     } catch {
       return json(res, 401, { error: 'Sign in again to look up payees.' })
     }
@@ -419,9 +566,8 @@ async function handleRequest(req, res) {
 // Only do this when run as the main script (not imported for testing).
 function checkEnvOrExit() {
   const missing = []
-  if (!PRIVY_APP_ID)           missing.push('PRIVY_APP_ID')
-  if (!PRIVY_APP_SECRET)       missing.push('PRIVY_APP_SECRET')
-  if (!PRIVY_VERIFICATION_KEY) missing.push('PRIVY_VERIFICATION_KEY')
+  if (!PRIVY_APP_ID)     missing.push('PRIVY_APP_ID')
+  if (!PRIVY_APP_SECRET) missing.push('PRIVY_APP_SECRET')
   if (missing.length > 0) {
     process.stderr.write(`earmark-api: missing required env vars: ${missing.join(', ')}\n`)
     process.exit(1)
@@ -429,11 +575,27 @@ function checkEnvOrExit() {
 }
 
 /** Export the handler so tests can call it directly without starting the server. */
-export { handleRequest, verifyPrivyJwt, getOrCreateWallet, checkRateLimit, recordRequest, emailKind, rateLimitMap }
+export {
+  handleRequest, verifyPrivyJwt, getOrCreateWallet, checkRateLimit, recordRequest,
+  emailKind, rateLimitMap, fetchJwks, jwksKeys,
+}
 
 // Start the server only when run directly (node earmark-api.mjs), not when imported.
 if (process.argv[1] && new URL(import.meta.url).pathname === process.argv[1]) {
   checkEnvOrExit()
+
+  // Load JWKS at startup; log a warning but do not exit on failure
+  fetchJwks().catch((err) => {
+    process.stderr.write(`earmark-api: JWKS startup load failed: ${String(err)}\n`)
+  })
+
+  // Refresh JWKS every hour — unref so it doesn't keep the process alive
+  const jwksTimer = setInterval(() => {
+    fetchJwks().catch((err) => {
+      process.stderr.write(`earmark-api: JWKS refresh failed: ${String(err)}\n`)
+    })
+  }, JWKS_REFRESH_INTERVAL_MS)
+  jwksTimer.unref()
 
   const server = createServer((req, res) => {
     handleRequest(req, res).catch((err) => {

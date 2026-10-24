@@ -67,16 +67,30 @@ Old entries are cleaned up hourly.
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `PRIVY_APP_ID` | Yes | Your Privy application ID |
-| `PRIVY_APP_SECRET` | Yes | Your Privy application secret |
-| `PRIVY_VERIFICATION_KEY` | Yes | ES256 public key PEM for verifying Privy JWTs. Literal `\n` in the value is accepted. |
+| `PRIVY_APP_ID` | **Yes** | Your Privy application ID |
+| `PRIVY_APP_SECRET` | **Yes** | Your Privy application secret |
+| `PRIVY_VERIFICATION_KEY` | No | Extra ES256 public key PEM (used as a fallback key with kid `"env"`). No longer required: keys are fetched automatically from Privy's JWKS endpoint at startup and refreshed hourly. Literal `\n` in the value is accepted. |
 | `PORT` | No | Listen port (default `8787`) |
 | `PRIVY_API_BASE` | No | Override Privy auth API base URL (default `https://auth.privy.io`). Intended for tests. |
 | `PRIVY_API_V1_BASE` | No | Override Privy wallet API base URL (default `https://api.privy.io`). Intended for tests. |
 
-### Getting the verification key
+### JWT verification — JWKS
 
-In the Privy dashboard → **Settings → API keys**, copy the public key and paste it as the value of `PRIVY_VERIFICATION_KEY`. If your deployment tool collapses newlines, use literal `\n` — the server converts them automatically.
+At startup the server fetches Privy's published signing keys from:
+
+```
+https://auth.privy.io/api/v1/apps/<PRIVY_APP_ID>/jwks.json
+```
+
+This is a public, unauthenticated endpoint. All EC / P-256 (ES256) keys are imported and stored in memory by `kid`. The key set is refreshed every hour in the background. If a token arrives with an unknown `kid`, the server triggers one additional refresh (at most once every 5 minutes) before returning 401.
+
+Tokens with no `kid` are verified against every known key (brute-force). `PRIVY_VERIFICATION_KEY`, if set, is added as an extra key (`kid "env"`) alongside the JWKS keys — useful as a fallback if JWKS cannot be reached or for local testing.
+
+If the initial JWKS fetch fails at startup (network unavailable, etc.), the server logs a warning and continues. Authentication will fall back to `PRIVY_VERIFICATION_KEY` if set, or fail with 401 until the next successful refresh.
+
+### Getting a verification key (optional)
+
+If you want the `PRIVY_VERIFICATION_KEY` fallback: in the Privy dashboard → **Settings → API keys**, copy the public key and paste it as the value. If your deployment tool collapses newlines, use literal `\n` — the server converts them automatically.
 
 ---
 
@@ -88,7 +102,7 @@ In the Privy dashboard → **Settings → API keys**, copy the public key and pa
 node /home/doorstep/earmark/server/earmark-api.mjs
 ```
 
-The server exits immediately with an error if any required env var is missing.
+The server exits immediately with an error if `PRIVY_APP_ID` or `PRIVY_APP_SECRET` are missing.
 
 ### systemd
 
@@ -107,7 +121,9 @@ The `EnvironmentFile` directive expects secrets in `/etc/earmark-api.env`:
 ```
 PRIVY_APP_ID=your-app-id
 PRIVY_APP_SECRET=your-app-secret
-PRIVY_VERIFICATION_KEY=-----BEGIN PUBLIC KEY-----\n...\n-----END PUBLIC KEY-----
+# PRIVY_VERIFICATION_KEY is now optional — JWKS keys are loaded automatically.
+# You may keep it as a fallback:
+# PRIVY_VERIFICATION_KEY=-----BEGIN PUBLIC KEY-----\n...\n-----END PUBLIC KEY-----
 ```
 
 ### Caddy (reverse proxy)
@@ -123,6 +139,7 @@ reverse_proxy /api/* 127.0.0.1:8787
 ## Security notes
 
 - The server **never** includes Privy response bodies, status codes, or secrets in its own responses or logs.
+- Key material is never logged or returned in any response.
 - Only `127.0.0.1` is bound — the port is not reachable from outside the machine without going through Caddy.
 - JWT verification rejects any algorithm other than `ES256` (including `"none"`).
 - Each confirmation code is single-use; codes are deleted from storage on first successful verification.
