@@ -191,11 +191,11 @@ export default function HowItWorksPage({ onBack, onSend, onAbout }: Props) {
             <ShieldCheck className="size-4 text-[var(--success)]" aria-hidden /> Verified payees
           </h2>
           <p className="mb-4 text-sm text-[var(--ink-2)] text-pretty">
-            Two ways to make sure a payee is real. Neither replaces contacting the payee through channels you found yourself.
+            Three ways to make sure a payee is real. None replaces contacting the payee through channels you found yourself.
           </p>
           <div className="space-y-3">
             <div className="rounded-card border border-[var(--line)] bg-[var(--surface)] p-4 shadow-card">
-              <p className="text-sm font-semibold text-[var(--ink)] mb-2">Option 1 — Domain verification (businesses with their own website)</p>
+              <p className="text-sm font-semibold text-[var(--ink)] mb-2">1) Domain verification (businesses with their own website)</p>
               <p className="text-sm text-[var(--ink-2)] mb-2 text-pretty">
                 Businesses add one line to their domain settings:{' '}
                 <code className="font-mono text-xs bg-[var(--surface-2)] px-1 rounded">earmark=0xTheirWallet</code>{' '}
@@ -208,7 +208,7 @@ export default function HowItWorksPage({ onBack, onSend, onAbout }: Props) {
               <p className="mt-2 text-xs text-[var(--warning)] font-medium">Free addresses like *.duckdns.org or *.github.io don't count — anyone can register those.</p>
             </div>
             <div className="rounded-card border border-[var(--line)] bg-[var(--surface)] p-4 shadow-card">
-              <p className="text-sm font-semibold text-[var(--ink)] mb-2">Option 2 — Ask them directly (anyone with a wallet)</p>
+              <p className="text-sm font-semibold text-[var(--ink)] mb-2">2) Ask them directly (anyone with a wallet)</p>
               <p className="text-sm text-[var(--ink-2)] mb-2 text-pretty">
                 Tap <strong>"Ask payee to confirm"</strong> and send the link using contact details you found yourself — their official phone number, email or website. They tap Confirm in their wallet (free, no money moves) and send the link back. You paste or open it; Earmark verifies the signature.
               </p>
@@ -217,10 +217,18 @@ export default function HowItWorksPage({ onBack, onSend, onAbout }: Props) {
               </p>
             </div>
             <div className="rounded-card border border-[var(--line)] bg-[var(--surface)] p-4 shadow-card">
+              <p className="text-sm font-semibold text-[var(--ink)] mb-2">3) Pay by email</p>
+              <p className="text-sm text-[var(--ink-2)] mb-2 text-pretty">
+                Type the payee's email in any address field. Earmark creates a permanent wallet for that address; only whoever controls that inbox can sign in and use the money. Business addresses (e.g. <code className="font-mono text-xs">billing@example.com</code>) show a green badge; personal addresses (Gmail, Outlook…) show a caution badge — confirm it's really their email.
+              </p>
+              <p className="text-xs text-[var(--warning)] font-medium">Use a business or official email, not a personal one, where possible.</p>
+            </div>
+            <div className="rounded-card border border-[var(--line)] bg-[var(--surface)] p-4 shadow-card">
               <p className="text-sm font-semibold text-[var(--ink)] mb-1">What verification proves and what it doesn't</p>
               <ul className="list-disc pl-5 space-y-1 text-sm text-[var(--ink-2)]">
                 <li><strong>Domain:</strong> the person controlling that domain linked this wallet address. Doesn't prove the domain belongs to the right company — confirm the domain separately.</li>
                 <li><strong>Wallet confirmation:</strong> someone who controls the payee's private key signed your request. The funder's responsibility is ensuring they're contacting the right person.</li>
+                <li><strong>Email:</strong> only whoever controls that inbox can access the funds. Doesn't prove the email belongs to the intended payee — confirm separately.</li>
                 <li>DNS records can change. The badge reflects the record at the time you check.</li>
               </ul>
             </div>

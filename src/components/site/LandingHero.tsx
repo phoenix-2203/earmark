@@ -47,11 +47,11 @@ export default function LandingHero({ onSend }: Props) {
         <p className="text-xs text-[var(--muted)] flex flex-wrap gap-x-4 gap-y-1 justify-center">
           <span className="flex items-center gap-1">
             <span className="size-1.5 rounded-full bg-[var(--success)] inline-block" aria-hidden />
-            Live on Arc
+            Sign in with Google
           </span>
           <span className="flex items-center gap-1">
             <span className="size-1.5 rounded-full bg-[var(--accent)] inline-block" aria-hidden />
-            Open source
+            Live on Arc
           </span>
           <span className="flex items-center gap-1">
             <span className="size-1.5 rounded-full bg-[var(--muted)] inline-block" aria-hidden />

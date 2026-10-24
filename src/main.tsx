@@ -15,15 +15,11 @@ import './console-capture'
 
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
-import { WagmiProvider } from 'wagmi'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { ConnectKitProvider } from 'connectkit'
 import { Toaster } from 'sonner'
-import { config } from './config'
 import App from './App'
 import './index.css'
-
-const queryClient = new QueryClient()
+import { PRIVY_ENABLED, PRIVY_APP_ID, PRIVY_VIEM_CHAIN, privyConfig } from './lib/privy'
 
 // Studio logo SVG
 const StudioLogo = () => (
@@ -68,17 +64,64 @@ const StudioWatermark = () => (
   </a>
 )
 
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <WagmiProvider config={config}>
-      <QueryClientProvider client={queryClient}>
-        <ConnectKitProvider>
-          <App />
-          <StudioWatermark />
-          <Toaster position="top-center" />
-        </ConnectKitProvider>
-      </QueryClientProvider>
-    </WagmiProvider>
-  </StrictMode>,
-)
+const queryClient = new QueryClient()
 
+function AppTree() {
+  return (
+    <>
+      <App />
+      <StudioWatermark />
+      <Toaster position="top-center" />
+    </>
+  )
+}
+
+if (PRIVY_ENABLED) {
+  // Dynamic import so that the Privy bundle is excluded when not configured.
+  // eslint-disable-next-line @typescript-eslint/no-floating-promises
+  Promise.all([
+    import('@privy-io/react-auth'),
+    import('@privy-io/wagmi'),
+    import('wagmi'),
+    import('viem'),
+  ]).then(([{ PrivyProvider }, { WagmiProvider, createConfig }, { http }]) => {
+    const privyWagmiConfig = createConfig({
+      chains: [PRIVY_VIEM_CHAIN],
+      transports: {
+        [PRIVY_VIEM_CHAIN.id]: http(PRIVY_VIEM_CHAIN.rpcUrls.default.http[0]),
+      },
+    })
+
+    createRoot(document.getElementById('root')!).render(
+      <StrictMode>
+        <PrivyProvider appId={PRIVY_APP_ID} config={privyConfig}>
+          <QueryClientProvider client={queryClient}>
+            <WagmiProvider config={privyWagmiConfig}>
+              <AppTree />
+            </WagmiProvider>
+          </QueryClientProvider>
+        </PrivyProvider>
+      </StrictMode>,
+    )
+  })
+} else {
+  // No Privy — use the existing wagmi + ConnectKit setup unchanged.
+  // eslint-disable-next-line @typescript-eslint/no-floating-promises
+  Promise.all([
+    import('wagmi'),
+    import('connectkit'),
+    import('./config'),
+  ]).then(([{ WagmiProvider }, { ConnectKitProvider }, { config }]) => {
+    createRoot(document.getElementById('root')!).render(
+      <StrictMode>
+        <WagmiProvider config={config}>
+          <QueryClientProvider client={queryClient}>
+            <ConnectKitProvider>
+              <AppTree />
+            </ConnectKitProvider>
+          </QueryClientProvider>
+        </WagmiProvider>
+      </StrictMode>,
+    )
+  })
+}

@@ -22,7 +22,7 @@ import { Plus, Trash2, ArrowLeft, HelpCircle } from 'lucide-react'
 import { toast } from 'sonner'
 import { config } from '@/config'
 import {
-  EARMARK_ADDRESS, EARMARK_ABI, EARMARK_CHAIN_ID,
+  EARMARK_ADDRESS, EARMARK_ABI, EARMARK_CHAIN_ID, EARMARK_CHAIN,
   USDC_ADDRESS,
 } from '@/earmarkConfig'
 import { CATEGORY_NAMES, CATEGORY_COLORS, friendlyErrorName } from '@/earmarkTypes'
@@ -30,7 +30,7 @@ import { parseUsdc, formatUsdc, localDateToExpiry, formatExpiry, isValidUsdcAmou
 import { Button } from '@/components/ui/Button'
 import { Field } from '@/components/ui/Field'
 import { Card } from '@/components/ui/Card'
-import { AddressInput } from '@/components/ui/AddressInput'
+import { EmailAddressInput } from '@/components/ui/EmailAddressInput'
 import { AmountInput } from '@/components/ui/AmountInput'
 import { Stepper } from '@/components/ui/Stepper'
 import { TxStatus } from '@/components/ui/TxStatus'
@@ -40,6 +40,7 @@ import PayeeBadge from '@/components/PayeeBadge'
 import AskPayeeToConfirmButton from '@/components/AskPayeeToConfirmButton'
 import { encodeLabel, encodedByteLength } from '@/lib/payeeLabel'
 import { normaliseDomain } from '@/lib/verifyPayee'
+import type { PayeeWalletResponse } from '@/lib/emailPayee'
 
 const CATEGORY_ICONS_COMP = [GraduationCap, House, HeartPulse, Briefcase, Layers]
 
@@ -52,6 +53,7 @@ interface PayeeRow {
   checksumAddress: `0x${string}` | null
   label: string
   website: string   // raw user input; normalised before encoding
+  emailData?: PayeeWalletResponse
 }
 
 interface Props {
@@ -86,6 +88,7 @@ export default function CreatePotPage({ onBack, onSuccess }: Props) {
   // Form state
   const [beneficiaryRaw, setBeneficiaryRaw] = useState('')
   const [beneficiary, setBeneficiary] = useState<`0x${string}` | null>(null)
+  const [beneficiaryEmailData, setBeneficiaryEmailData] = useState<PayeeWalletResponse | null>(null)
   const [title, setTitle] = useState('')
   const [category, setCategory] = useState(0)
   const [amount, setAmount] = useState('')
@@ -101,6 +104,25 @@ export default function CreatePotPage({ onBack, onSuccess }: Props) {
   const [txHash, setTxHash] = useState<`0x${string}` | undefined>()
   const [txError, setTxError] = useState<string | undefined>()
   const [createdPotId, setCreatedPotId] = useState<bigint | undefined>()
+
+  // Recipient balance (to decide whether to offer fee top-up)
+  const { data: recipientBalance } = useReadContract({
+    address: USDC_ADDRESS,
+    abi: erc20Abi,
+    functionName: 'balanceOf',
+    args: beneficiary ? [beneficiary] : undefined,
+    chainId: EARMARK_CHAIN_ID,
+    query: { enabled: !!beneficiary, refetchInterval: 60_000 },
+  })
+  // Offer fee top-up when recipient has < 0.02 USDC (e.g. brand-new email wallet)
+  const FEE_OFFER_THRESHOLD = parseUsdc('0.02')
+  const FEE_TOP_UP_AMOUNT   = parseUsdc('0.05')
+  const showFeeOffer = beneficiary !== null && recipientBalance !== undefined && recipientBalance < FEE_OFFER_THRESHOLD
+  const [sendFeeToRecipient, setSendFeeToRecipient] = useState(true)
+
+  // Fee transfer phase (second step after pot creation)
+  const [feeTxPhase, setFeeTxPhase] = useState<'idle' | 'awaiting' | 'waiting' | 'done' | 'failed'>('idle')
+  const [feeTxHash, setFeeTxHash] = useState<`0x${string}` | undefined>()
 
   // USDC balance
   const { data: usdcBalance } = useReadContract({
@@ -261,11 +283,33 @@ export default function CreatePotPage({ onBack, onSuccess }: Props) {
       setTxPhase('done')
       setCreatedPotId(potId)
       toast.success('Pot created!')
+
+      // Optional: send fee top-up to recipient
+      if (sendFeeToRecipient && showFeeOffer && beneficiary) {
+        setFeeTxPhase('awaiting')
+        try {
+          const feeHash = await writeContract(config, {
+            address: USDC_ADDRESS,
+            abi: erc20Abi,
+            functionName: 'transfer',
+            args: [beneficiary, FEE_TOP_UP_AMOUNT],
+            chainId: EARMARK_CHAIN_ID,
+          })
+          setFeeTxHash(feeHash)
+          setFeeTxPhase('waiting')
+          await waitForTransactionReceipt(config, { hash: feeHash, chainId: EARMARK_CHAIN_ID })
+          setFeeTxPhase('done')
+          toast.success('Fee USDC sent to recipient!')
+        } catch {
+          setFeeTxPhase('failed')
+          toast.error('Fee transfer failed — the pot was still created.')
+        }
+      }
     } catch (err) {
       setTxPhase('failed')
       setTxError(extractErr(err))
     }
-  }, [address, beneficiary, wrongChain, amount, expiryDate, completedPayees, title, category])
+  }, [address, beneficiary, wrongChain, amount, expiryDate, completedPayees, title, category, sendFeeToRecipient, showFeeOffer, FEE_TOP_UP_AMOUNT])
 
   // Map txPhase → ActionState for TxStatus component
   const actionState: ActionState =
@@ -279,6 +323,10 @@ export default function CreatePotPage({ onBack, onSuccess }: Props) {
   const stepperSteps = [
     { label: 'Allow Earmark to move USDC',      status: txPhase === 'idle' || txPhase === 'checkingAllowance' ? 'active' as const : txPhase === 'awaitingApproval' || txPhase === 'waitingApproval' ? 'active' as const : 'done' as const },
     { label: 'Create the pot',                  status: txPhase === 'awaitingCreate' || txPhase === 'waitingCreate' ? 'active' as const : txPhase === 'done' ? 'done' as const : 'pending' as const },
+    ...(sendFeeToRecipient && showFeeOffer ? [{
+      label: 'Send 0.05 USDC to recipient for fees',
+      status: feeTxPhase === 'idle' ? 'pending' as const : feeTxPhase === 'awaiting' || feeTxPhase === 'waiting' ? 'active' as const : 'done' as const,
+    }] : []),
   ]
 
   // ── Success state ──
@@ -294,6 +342,13 @@ export default function CreatePotPage({ onBack, onSuccess }: Props) {
           <p className="text-sm text-[var(--muted)]">
             Share this link with the recipient so they can view the pot and make payments.
           </p>
+          {feeTxPhase !== 'idle' && (
+            <TxStatus
+              state={feeTxPhase === 'awaiting' ? 'awaitingSignature' : feeTxPhase === 'waiting' ? 'submitted' : feeTxPhase === 'done' ? 'confirmed' : 'failed'}
+              txHash={feeTxHash}
+              errorMessage={feeTxPhase === 'failed' ? 'Fee transfer failed — the pot was still created.' : undefined}
+            />
+          )}
           <div className="flex gap-3 justify-center flex-wrap">
             <Button
               variant="primary"
@@ -399,24 +454,50 @@ export default function CreatePotPage({ onBack, onSuccess }: Props) {
         {/* Beneficiary */}
         <Card padding="lg">
           <Field
-            label="Who is it for? (recipient's wallet)"
+            label="Who is it for? (wallet address or email)"
             help="The person who will spend from this pot. You can't be your own recipient."
             error={errors.beneficiary}
           >
             {(fieldProps) => (
-              <AddressInput
+              <EmailAddressInput
                 {...fieldProps}
                 value={beneficiaryRaw}
-                onChange={(raw, checksummed) => {
-                  setBeneficiaryRaw(raw)
-                  setBeneficiary(checksummed)
+                onChange={(result) => {
+                  setBeneficiaryRaw(result.raw)
+                  setBeneficiary(result.checksummed)
+                  setBeneficiaryEmailData(result.emailData ?? null)
                   if (errors.beneficiary) setErrors((e) => { const ne = { ...e }; delete ne.beneficiary; return ne })
                 }}
-                placeholder="0x…"
+                placeholder="0x… or name@example.com"
+                funder={address}
               />
             )}
           </Field>
+          {beneficiary && beneficiaryEmailData && (
+            <PayeeBadge
+              address={beneficiary}
+              email={beneficiaryEmailData.email}
+              emailKind={beneficiaryEmailData.emailKind}
+            />
+          )}
         </Card>
+
+        {/* Fee top-up offer (new email recipient with low balance) */}
+        {showFeeOffer && (
+          <div className="flex items-start gap-3 rounded-card border border-[var(--line)] bg-[var(--accent-soft)] p-4">
+            <input
+              type="checkbox"
+              id="send-fee"
+              checked={sendFeeToRecipient}
+              onChange={(e) => setSendFeeToRecipient(e.target.checked)}
+              className="mt-0.5 size-4 rounded focus-visible:outline-2 focus-visible:outline-[var(--focus)]"
+            />
+            <label htmlFor="send-fee" className="text-sm text-[var(--accent)] cursor-pointer select-none">
+              Also send <strong>0.05 USDC</strong> to the recipient for network fees (paid in USDC on Arc).
+              They will need a small amount to make payments from the pot.
+            </label>
+          </div>
+        )}
 
         {/* Title + Category */}
         <Card padding="lg" className="space-y-4">
@@ -559,13 +640,14 @@ export default function CreatePotPage({ onBack, onSuccess }: Props) {
                 />
               </div>
               <div>
-                <label className="mb-1 block text-xs text-[var(--muted)]">Wallet address</label>
-                <AddressInput
+                <label className="mb-1 block text-xs text-[var(--muted)]">Wallet address or email</label>
+                <EmailAddressInput
                   value={payee.rawAddress}
-                  onChange={(raw, checksummed) =>
-                    setPayees((p) => p.map((r, j) => j === i ? { ...r, rawAddress: raw, checksumAddress: checksummed } : r))
+                  onChange={(result) =>
+                    setPayees((p) => p.map((r, j) => j === i ? { ...r, rawAddress: result.raw, checksumAddress: result.checksummed, emailData: result.emailData } : r))
                   }
-                  placeholder="0x…"
+                  placeholder="0x… or name@example.com"
+                  funder={address}
                 />
               </div>
               <div>
@@ -594,6 +676,8 @@ export default function CreatePotPage({ onBack, onSuccess }: Props) {
                       domain={payee.website.trim() ? (() => { const n = normaliseDomain(payee.website); return n.ok ? n.domain : undefined })() : undefined}
                       address={payee.checksumAddress}
                       funder={address}
+                      email={payee.emailData?.email}
+                      emailKind={payee.emailData?.emailKind}
                     />
                     <AskPayeeToConfirmButton
                       payee={payee.checksumAddress}
@@ -630,5 +714,4 @@ function ReviewRow({ label, value, mono }: { label: string; value: string; mono?
   )
 }
 
-// Need to import EARMARK_CHAIN here
-import { EARMARK_CHAIN } from '@/earmarkConfig'
+

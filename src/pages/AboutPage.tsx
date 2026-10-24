@@ -24,15 +24,7 @@ const USE_CASES = [
 
 const ROADMAP = [
   {
-    title: 'Find and verify payees by email (Google sign-in)',
-    desc: 'Funders will be able to search for a payee by email address and automatically verify their wallet — no copy-pasting addresses or manual confirmation steps.',
-  },
-  {
-    title: 'Sign in with Google (embedded wallets)',
-    desc: 'Recipients and payees will be able to use Earmark with just a Google account — no crypto wallet setup required.',
-  },
-  {
-    title: 'Gas sponsorship for new users',
+    title: 'Fee sponsorship so new users need no USDC for fees',
     desc: 'New users will be able to accept payments and pay approved payees with 0 USDC in their wallet — gas covered on their behalf.',
   },
   {
@@ -173,6 +165,28 @@ export default function AboutPage({ onSend, onSent, onReceived, onHow, onBack }:
                 <Github className="size-4" aria-hidden />
                 Source on GitHub
               </a>
+            </div>
+          </div>
+        </section>
+
+        {/* ── What we store ── */}
+        <section className="py-14" style={{ background: 'var(--bg)' }}>
+          <div className="mx-auto max-w-[720px] px-4">
+            <h2 className="display mb-4 text-xl font-semibold text-[var(--ink)]" style={{ letterSpacing: '-0.02em' }}>
+              What we store
+            </h2>
+            <div className="space-y-3 text-sm text-[var(--ink-2)] leading-relaxed">
+              <p>
+                Earmark stores nothing itself. All pot data — recipients, payees, payments — is written directly to the Arc smart contract and is public and permanent on-chain.
+              </p>
+              <p>
+                Sign-in and embedded wallets are provided by{' '}
+                <a href="https://privy.io" target="_blank" rel="noopener noreferrer" className="text-[var(--accent)] hover:underline focus-visible:outline-2 focus-visible:outline-[var(--focus)] rounded">Privy</a>.
+                {' '}Privy stores the association between your email/Google account and your wallet. Earmark does not have access to your private key; Privy manages it on your behalf.
+              </p>
+              <p>
+                The Earmark API only looks up or creates the wallet for an email you type when adding a payee — no emails or names are stored server-side after the response.
+              </p>
             </div>
           </div>
         </section>

@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react'
-import { ConnectKitButton } from 'connectkit'
 import { useAccount } from 'wagmi'
 import NetworkGuard from '@/components/NetworkGuard'
 import UsdcBalance from '@/components/UsdcBalance'
+import SignInButton from '@/components/SignInButton'
 import HomePage from '@/pages/HomePage'
 import AboutPage from '@/pages/AboutPage'
 import CreatePotPage from '@/pages/CreatePotPage'
@@ -11,13 +11,15 @@ import ForMePage from '@/pages/ForMePage'
 import ReceiptPage from '@/pages/ReceiptPage'
 import PotPage from '@/pages/PotPage'
 import HowItWorksPage from '@/pages/HowItWorksPage'
+import WalletPage from '@/pages/WalletPage'
 import ConfirmPayeePage from '@/pages/ConfirmPayeePage'
 import PayeeConfirmedPage from '@/pages/PayeeConfirmedPage'
 import { EARMARK_CHAIN, EARMARK_ADDRESS } from '@/earmarkConfig'
+import { PRIVY_ENABLED } from '@/lib/privy'
 import { Send, Inbox, PiggyBank } from 'lucide-react'
 
 // ── Routes ──────────────────────────────────────────────────────────────────
-export type Page = 'home' | 'about' | 'send' | 'sent' | 'received' | 'receipt' | 'pot' | 'how' | 'confirm-payee' | 'payee-confirmed'
+export type Page = 'home' | 'about' | 'send' | 'sent' | 'received' | 'receipt' | 'pot' | 'how' | 'wallet' | 'confirm-payee' | 'payee-confirmed'
 
 interface Route {
   page: Page
@@ -39,6 +41,7 @@ function parseRoute(): Route {
   if (hash === '/sent')     return { page: 'sent' }
   if (hash === '/received') return { page: 'received' }
   if (hash === '/how')      return { page: 'how' }
+  if (hash === '/wallet')   return { page: 'wallet' }
   if (hash === '/about' || hash.startsWith('/about')) return { page: 'about' }
   if (hash.startsWith('/confirm-payee'))  return { page: 'confirm-payee' }
   if (hash.startsWith('/payee-confirmed')) return { page: 'payee-confirmed' }
@@ -54,6 +57,7 @@ function routeToHash(page: Page, potId?: bigint, paymentIndex?: number): string 
   if (page === 'sent')     return '#/sent'
   if (page === 'received') return '#/received'
   if (page === 'how')      return '#/how'
+  if (page === 'wallet')   return '#/wallet'
   if (page === 'about')    return '#/about'
   return '#/'
 }
@@ -68,7 +72,7 @@ const NAV = [
 // Pages that use the full app shell (header + tab bar)
 const SHELL_PAGES: Page[] = ['send', 'sent', 'received']
 // Pages that use the minimal public header (wordmark + wallet, no tab bar)
-const PUBLIC_PAGES: Page[] = ['pot', 'receipt']
+const PUBLIC_PAGES: Page[] = ['pot', 'receipt', 'wallet']
 // Pages that render their own SiteHeader via their component (no shell from App)
 const SITE_PAGES: Page[] = ['home', 'about', 'how']
 // Pages that are standalone (no shell, no site header)
@@ -139,8 +143,8 @@ export default function App() {
               ))}
             </nav>
             <div className="flex items-center gap-3">
-              {isConnected && <UsdcBalance />}
-              <ConnectKitButton />
+              {isConnected && !PRIVY_ENABLED && <UsdcBalance />}
+              <SignInButton onWallet={() => navigate('wallet')} />
             </div>
           </div>
           <div className="px-4 pb-2">
@@ -149,7 +153,7 @@ export default function App() {
         </header>
       )}
 
-      {/* ── Minimal public header (pot / receipt pages) ── */}
+      {/* ── Minimal public header (pot / receipt / wallet pages) ── */}
       {showPublicHeader && (
         <header className="sticky top-0 z-40 border-b border-[var(--line)] bg-[var(--surface)]">
           <div className="mx-auto flex max-w-page items-center justify-between px-4 py-3">
@@ -166,8 +170,8 @@ export default function App() {
               >
                 How it works
               </button>
-              {isConnected && <UsdcBalance />}
-              <ConnectKitButton />
+              {isConnected && !PRIVY_ENABLED && <UsdcBalance />}
+              <SignInButton onWallet={() => navigate('wallet')} />
             </div>
           </div>
         </header>
@@ -230,6 +234,17 @@ export default function App() {
           potId={route.potId}
           onBack={() => window.history.back()}
           onReceipt={(potId, index) => navigate('receipt', potId, index)}
+        />
+      )}
+      {route.page === 'wallet' && (
+        <WalletPage
+          onBack={() => window.history.back()}
+          onSignIn={() => {
+            if (PRIVY_ENABLED) {
+              // Privy login is triggered by SignInButton; navigate back to wallet after
+              navigate('wallet')
+            }
+          }}
         />
       )}
 

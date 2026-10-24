@@ -24,6 +24,8 @@
     "@circle-fin/user-controlled-wallets": "^10.8.0",
     "@circle-fin/w3s-pw-web-sdk": "^1.1.11",
     "@openzeppelin/contracts": "5.1.0",
+    "@privy-io/react-auth": "3.48.1",
+    "@privy-io/wagmi": "4.0.18",
     "@tanstack/react-query": "^5.62.7",
     "@web3icons/react": "^4.0.0",
     "clsx": "^2.1.1",
@@ -35,11 +37,11 @@
     "react-dom": "^18.3.1",
     "sonner": "^1.7.1",
     "tailwind-merge": "^2.6.0",
-    "viem": "^2.56.3",
+    "viem": "2.56.5",
     "wagmi": "^2.19.5"
   },
   "overrides": {
-    "viem": "^2.56.3"
+    "viem": "2.56.5"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

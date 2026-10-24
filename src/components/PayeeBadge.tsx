@@ -12,7 +12,7 @@
  *
  * Uses text + icon (never colour alone) for accessibility.
  */
-import { ShieldCheck, ShieldAlert, ShieldQuestion, Shield, Loader2, BadgeCheck, Clock } from 'lucide-react'
+import { ShieldCheck, ShieldAlert, ShieldQuestion, Shield, Loader2, BadgeCheck, Clock, MailCheck, Mail } from 'lucide-react'
 import { usePayeeVerification } from '@/lib/verifyPayee'
 import { getConfirmedPayee, hasPendingRequest } from '@/lib/confirmPayee'
 import { formatDate } from '@/utils/format'
@@ -22,11 +22,45 @@ interface Props {
   address:    string
   /** Funder address — when provided, confirmed/pending states are shown. */
   funder?:    `0x${string}`
+  /** Email that was used to resolve this address. Takes priority above domain check. */
+  email?:     string
+  /** Classification of the email ('personal' | 'business'). Required when email is set. */
+  emailKind?: 'personal' | 'business'
   onRetry?:   () => void
   className?: string
 }
 
-export default function PayeeBadge({ domain, address, funder, onRetry, className = '' }: Props) {
+export default function PayeeBadge({ domain, address, funder, email, emailKind, onRetry, className = '' }: Props) {
+  // 0. Email-based wallet (highest priority — above confirmation)
+  if (email) {
+    if (emailKind === 'business') {
+      return (
+        <span
+          className={`inline-flex items-start gap-1 text-xs font-medium text-[var(--success)] ${className}`}
+          title={`Earmark wallet for ${email}`}
+        >
+          <MailCheck className="mt-0.5 size-3.5 shrink-0" aria-hidden />
+          <span>
+            Earmark wallet of <strong className="font-semibold">{email}</strong> — only whoever controls this inbox can use it.{' '}
+            Make sure it's their official email.
+          </span>
+        </span>
+      )
+    }
+    // personal
+    return (
+      <span
+        className={`inline-flex items-start gap-1 text-xs font-medium text-[var(--warning)] ${className}`}
+        title={`Earmark wallet for ${email} (personal address)`}
+      >
+        <Mail className="mt-0.5 size-3.5 shrink-0" aria-hidden />
+        <span>
+          Earmark wallet of <strong className="font-semibold">{email}</strong> (personal address) — check with them that this is really their email.
+        </span>
+      </span>
+    )
+  }
+
   // 1. Check confirmed-by-payee (synchronous localStorage read)
   const confirmed = funder ? getConfirmedPayee(funder, address as `0x${string}`) : null
   if (confirmed) {

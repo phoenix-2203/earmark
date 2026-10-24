@@ -35,8 +35,12 @@ const FAQS = [
     a: 'No. When you create a pot, the USDC is transferred directly into the Earmark smart contract — there is no company holding it. The contract has no owner, no admin key, and takes no fees. You pay only the Arc network gas (also in USDC, typically a fraction of a cent).',
   },
   {
-    q: 'Do I need crypto experience to use Earmark?',
-    a: 'Today you need a crypto wallet (such as MetaMask) with USDC on Arc. We are working on Google sign-in for recipients and payees so they can use Earmark without setting up a wallet — that is on the roadmap but not yet available.',
+    q: 'Do I need crypto experience?',
+    a: 'No. Sign in with Google or your email and Earmark creates a wallet for you. You can also connect your own wallet.',
+  },
+  {
+    q: 'Can I pay someone who isn\'t on Earmark yet?',
+    a: 'Yes — type their email. Earmark creates their wallet; only whoever controls that inbox can sign in and use the money.',
   },
 ]
 

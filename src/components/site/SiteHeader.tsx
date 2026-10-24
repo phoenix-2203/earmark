@@ -5,11 +5,15 @@
 import { useState, useRef, useEffect } from 'react'
 import { Github, Menu, X, ExternalLink } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
+import SignInButton from '@/components/SignInButton'
+import { PRIVY_ENABLED } from '@/lib/privy'
 
 interface Props {
   onOpenApp: () => void
   onHow: () => void
   onAbout: () => void
+  /** Navigate to the wallet page. Defaults to onOpenApp when not provided. */
+  onWallet?: () => void
 }
 
 const NAV_LINKS = [
@@ -26,7 +30,7 @@ function scrollTo(id: string) {
   else window.location.hash = id
 }
 
-export default function SiteHeader({ onOpenApp, onHow, onAbout }: Props) {
+export default function SiteHeader({ onOpenApp, onHow, onAbout, onWallet = onOpenApp }: Props) {
   const [open, setOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
 
@@ -104,13 +108,20 @@ export default function SiteHeader({ onOpenApp, onHow, onAbout }: Props) {
           >
             <Github className="size-5" aria-hidden />
           </a>
-          <Button size="sm" onClick={onOpenApp} className="hidden sm:flex items-center gap-1.5">
-            Open the app
-            <ExternalLink className="size-3.5" aria-hidden />
-          </Button>
+          {PRIVY_ENABLED ? (
+            <SignInButton onWallet={onWallet} />
+          ) : (
+            <>
+              <Button size="sm" onClick={onOpenApp} className="hidden sm:flex items-center gap-1.5">
+                Open the app
+                <ExternalLink className="size-3.5" aria-hidden />
+              </Button>
+              <Button size="sm" onClick={onOpenApp} className="sm:hidden">Open the app</Button>
+            </>
+          )}
 
-          {/* Mobile: Open app + hamburger */}
-          <Button size="sm" onClick={onOpenApp} className="sm:hidden">Open the app</Button>
+          {/* Mobile: hamburger (shown when no inline CTA visible) */}
+          {!PRIVY_ENABLED && <Button size="sm" onClick={onOpenApp} className="sm:hidden hidden">Open the app</Button>}
           <div className="relative lg:hidden" ref={menuRef}>
             <button
               aria-label={open ? 'Close menu' : 'Open menu'}
