@@ -19,11 +19,11 @@ interface Props {
 }
 
 const NAV_LINKS = [
-  { label: 'In 30 seconds', href: '#in-30-seconds' },
-  { label: 'Use cases',     href: '#use-cases'      },
-  { label: 'Live on Arc',   href: '#live'           },
-  { label: 'Safety',        href: '#safety'         },
-  { label: 'FAQ',           href: '#faq'            },
+  { label: 'In 30 seconds', href: '#in-30-seconds', wideOnly: false },
+  { label: 'Use cases',     href: '#use-cases',     wideOnly: false },
+  { label: 'Live on Arc',   href: '#live',          wideOnly: true  },
+  { label: 'Safety',        href: '#safety',        wideOnly: true  },
+  { label: 'FAQ',           href: '#faq',           wideOnly: false },
 ]
 
 function scrollTo(id: string) {
@@ -79,25 +79,25 @@ export default function SiteHeader({ onOpenApp, onHow, onAbout, onWallet = onOpe
         </button>
 
         {/* ── Desktop centre nav ── */}
-        <nav className="hidden lg:flex items-center gap-1" aria-label="Site navigation">
-          {NAV_LINKS.map(({ label, href }) => (
+        <nav className="hidden lg:flex items-center gap-0.5" aria-label="Site navigation">
+          {NAV_LINKS.map(({ label, href, wideOnly }) => (
             <button
               key={href}
               onClick={() => handleNavClick(href)}
-              className="rounded px-3 py-1.5 text-sm font-medium text-[var(--ink-2)] hover:bg-[var(--surface-2)] hover:text-[var(--ink)] focus-visible:outline-2 focus-visible:outline-[var(--focus)] transition-colors"
+              className={`whitespace-nowrap rounded px-2.5 py-1.5 text-sm font-medium text-[var(--ink-2)] hover:bg-[var(--surface-2)] hover:text-[var(--ink)] focus-visible:outline-2 focus-visible:outline-[var(--focus)] transition-colors${wideOnly ? ' hidden wide:block' : ''}`}
             >
               {label}
             </button>
           ))}
           <button
             onClick={onHow}
-            className="rounded px-3 py-1.5 text-sm font-medium text-[var(--ink-2)] hover:bg-[var(--surface-2)] hover:text-[var(--ink)] focus-visible:outline-2 focus-visible:outline-[var(--focus)] transition-colors"
+            className="whitespace-nowrap rounded px-2.5 py-1.5 text-sm font-medium text-[var(--ink-2)] hover:bg-[var(--surface-2)] hover:text-[var(--ink)] focus-visible:outline-2 focus-visible:outline-[var(--focus)] transition-colors"
           >
             How it works
           </button>
           <button
             onClick={onAbout}
-            className="rounded px-3 py-1.5 text-sm font-medium text-[var(--ink-2)] hover:bg-[var(--surface-2)] hover:text-[var(--ink)] focus-visible:outline-2 focus-visible:outline-[var(--focus)] transition-colors"
+            className="whitespace-nowrap rounded px-2.5 py-1.5 text-sm font-medium text-[var(--ink-2)] hover:bg-[var(--surface-2)] hover:text-[var(--ink)] focus-visible:outline-2 focus-visible:outline-[var(--focus)] transition-colors"
           >
             About
           </button>
@@ -119,7 +119,7 @@ export default function SiteHeader({ onOpenApp, onHow, onAbout, onWallet = onOpe
             <SignInButton onWallet={onWallet} />
           ) : (
             <>
-              <Button size="sm" onClick={onOpenApp} className="hidden sm:flex items-center gap-1.5">
+              <Button size="sm" onClick={onOpenApp} className="hidden sm:flex items-center gap-1.5 whitespace-nowrap">
                 Open the app
                 <ExternalLink className="size-3.5" aria-hidden />
               </Button>

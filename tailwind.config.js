@@ -45,6 +45,9 @@ export default {
         content: '640px',
         page:    '960px',
       },
+      screens: {
+        wide: '1360px',
+      },
     },
   },
   plugins: [],
