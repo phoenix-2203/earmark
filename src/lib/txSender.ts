@@ -33,6 +33,10 @@ import { config } from '@/config'
 import { EARMARK_CHAIN_ID, publicClient } from '@/earmarkConfig'
 import { PRIVY_ENABLED, useEmbeddedAddress } from '@/lib/privy'
 import { friendlyErrorName } from '@/earmarkTypes'
+import { chooseRoute } from '@/lib/chooseRoute'
+
+export { chooseRoute } from '@/lib/chooseRoute'
+export type { TxRoute } from '@/lib/chooseRoute'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -46,35 +50,6 @@ export interface ContractCall {
 export interface SendResult {
   hash: `0x${string}`
   receipt: { status: 'success' | 'reverted' }
-}
-
-// ── chooseRoute (pure, testable) ──────────────────────────────────────────────
-
-export type TxRoute = 'privy' | 'wagmi'
-
-/**
- * Decide which signer to use for a transaction.
- *
- * Rules:
- *  - If Privy is not enabled → always 'wagmi'
- *  - If there is no active wallet address → 'wagmi' (will fail with "connect wallet")
- *  - If there is no embedded wallet → 'wagmi'
- *  - If active address equals embedded address (case-insensitive) → 'privy'
- *  - Otherwise (active = external wallet) → 'wagmi'
- */
-export function chooseRoute({
-  privyEnabled,
-  activeAddress,
-  embeddedAddress,
-}: {
-  privyEnabled: boolean
-  activeAddress: string | undefined
-  embeddedAddress: string | undefined
-}): TxRoute {
-  if (!privyEnabled) return 'wagmi'
-  if (!activeAddress || !embeddedAddress) return 'wagmi'
-  if (activeAddress.toLowerCase() === embeddedAddress.toLowerCase()) return 'privy'
-  return 'wagmi'
 }
 
 // ── Error decoding (shared) ───────────────────────────────────────────────────

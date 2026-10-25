@@ -8,9 +8,11 @@
  *  - lookupPayeeWallet response parser (200 OK, 401, 429, malformed)
  *  - storeEmailPayee / getEmailPayeeAddress (localStorage stub)
  *  - Contract always receives 0x address, never an email
+ *  - chooseRoute (txSender) — Privy vs wagmi routing cases
  */
 
 import { classifyEmail, isEmail, lookupPayeeWallet, storeEmailPayee, getEmailPayeeAddress } from '../src/lib/emailPayee'
+import { chooseRoute } from '../src/lib/chooseRoute'
 
 // ─── Tiny test harness ────────────────────────────────────────────────────────
 let passed = 0
@@ -184,6 +186,40 @@ console.log('\nContract address invariant')
   ok('no @ in address', !addressPassedToContract.includes('@'))
   ok('length 42', addressPassedToContract.length === 42)
 }
+
+// ─── chooseRoute ─────────────────────────────────────────────────────────────
+console.log('\nchooseRoute — Privy vs wagmi routing')
+
+const EMB = '0xEmbedded1234567890123456789012345678901234'
+const EXT = '0xExternal1234567890123456789012345678901234'
+
+// Privy disabled → always wagmi
+ok('privy disabled → wagmi',
+  chooseRoute({ privyEnabled: false, activeAddress: EMB, embeddedAddress: EMB }) === 'wagmi')
+
+// Active address equals embedded (same case) → privy
+ok('active = embedded (same case) → privy',
+  chooseRoute({ privyEnabled: true, activeAddress: EMB, embeddedAddress: EMB }) === 'privy')
+
+// Active address equals embedded (different case) → privy
+ok('active = embedded (lower vs upper) → privy',
+  chooseRoute({ privyEnabled: true, activeAddress: EMB.toLowerCase(), embeddedAddress: EMB.toUpperCase() }) === 'privy')
+
+// Active address is external wallet → wagmi
+ok('active = external wallet → wagmi',
+  chooseRoute({ privyEnabled: true, activeAddress: EXT, embeddedAddress: EMB }) === 'wagmi')
+
+// No active address → wagmi
+ok('no active address → wagmi',
+  chooseRoute({ privyEnabled: true, activeAddress: undefined, embeddedAddress: EMB }) === 'wagmi')
+
+// No embedded address → wagmi
+ok('no embedded address → wagmi',
+  chooseRoute({ privyEnabled: true, activeAddress: EMB, embeddedAddress: undefined }) === 'wagmi')
+
+// Both undefined → wagmi
+ok('both undefined → wagmi',
+  chooseRoute({ privyEnabled: true, activeAddress: undefined, embeddedAddress: undefined }) === 'wagmi')
 
 // ─── Summary ─────────────────────────────────────────────────────────────────
 console.log(`\n${passed + failed} tests: ${passed} passed, ${failed} failed\n`)
