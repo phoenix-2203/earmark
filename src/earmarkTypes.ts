@@ -11,13 +11,13 @@ export const CATEGORY_ICONS: Record<number, string> = {
   4: 'Layers',
 }
 
-/** Category chip colours: badge background / badge text */
+/** Category chip colours: badge background / badge text (CSS variable refs — theme-aware) */
 export const CATEGORY_COLORS: Record<number, { bg: string; text: string }> = {
-  0: { bg: '#E6F0FF', text: '#1D4ED8' },   // School
-  1: { bg: '#F1ECFF', text: '#5B3FD1' },   // Rent
-  2: { bg: '#FDECEC', text: '#B42318' },   // Medical
-  3: { bg: '#FFF4E0', text: '#9A5B07' },   // Business
-  4: { bg: '#EEF1F4', text: '#3C4B5A' },   // Other
+  0: { bg: 'var(--cat-edu-bg)',      text: 'var(--cat-edu-fg)'      },   // Education
+  1: { bg: 'var(--cat-housing-bg)',  text: 'var(--cat-housing-fg)'  },   // Housing
+  2: { bg: 'var(--cat-health-bg)',   text: 'var(--cat-health-fg)'   },   // Health
+  3: { bg: 'var(--cat-business-bg)', text: 'var(--cat-business-fg)' },   // Business
+  4: { bg: 'var(--cat-other-bg)',    text: 'var(--cat-other-fg)'    },   // Other
 }
 
 export interface Pot {

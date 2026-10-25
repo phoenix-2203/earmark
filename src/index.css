@@ -40,6 +40,13 @@
   --danger-line:    #F5C6C3;
   --info-soft:      #E6F0FF;
 
+  /* Category chip tokens */
+  --cat-edu-bg:      #E6F0FF;  --cat-edu-fg:      #1D4ED8;
+  --cat-housing-bg:  #F1ECFF;  --cat-housing-fg:  #5B3FD1;
+  --cat-health-bg:   #FDECEC;  --cat-health-fg:   #B42318;
+  --cat-business-bg: #FFF4E0;  --cat-business-fg: #9A5B07;
+  --cat-other-bg:    #EEF1F4;  --cat-other-fg:    #3C4B5A;
+
   /* Legacy aliases — kept so older components still compile */
   --bg-gradient:     #F5F6F8;
   --border:          #DCE1E6;
@@ -69,6 +76,13 @@
     --accent-soft: #12332D;
     --focus:       #6FD3BA;
     --on-accent:   #062B23;
+
+    /* Category chip tokens */
+    --cat-edu-bg:      #13243F;  --cat-edu-fg:      #8DB8FF;
+    --cat-housing-bg:  #241B45;  --cat-housing-fg:  #B9A6FF;
+    --cat-health-bg:   #3A1614;  --cat-health-fg:   #F27A6E;
+    --cat-business-bg: #3A2A0E;  --cat-business-fg: #E0A23B;
+    --cat-other-bg:    #172633;  --cat-other-fg:    #B8C4CF;
 
     /* CTA band */
     --band:           #0E4F44;
@@ -111,6 +125,13 @@
   --accent-soft: #12332D;
   --focus:       #6FD3BA;
   --on-accent:   #062B23;
+
+  /* Category chip tokens */
+  --cat-edu-bg:      #13243F;  --cat-edu-fg:      #8DB8FF;
+  --cat-housing-bg:  #241B45;  --cat-housing-fg:  #B9A6FF;
+  --cat-health-bg:   #3A1614;  --cat-health-fg:   #F27A6E;
+  --cat-business-bg: #3A2A0E;  --cat-business-fg: #E0A23B;
+  --cat-other-bg:    #172633;  --cat-other-fg:    #B8C4CF;
 
   /* CTA band */
   --band:           #0E4F44;

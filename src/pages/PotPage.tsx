@@ -832,7 +832,7 @@ function PayeeRequestCard({ potId, req, requestId, potTitle, onResolved }: {
   const err = approveAction.errorMessage ?? rejectAction.errorMessage
 
   return (
-    <div className="rounded-card border border-[#DCE8F5] bg-[var(--surface)] p-3 space-y-2">
+    <div className="rounded-card border border-[var(--line)] bg-[var(--surface)] p-3 space-y-2">
       <div>
         <p className="text-xs font-semibold text-[var(--ink)]">
           {parsedReq.name} <span className="font-normal text-[var(--muted)]">— <AddressChip address={req.payee} /></span>
