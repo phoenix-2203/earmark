@@ -11,7 +11,7 @@
 import { useState, useEffect } from 'react'
 import { useAccount, useReadContract } from 'wagmi'
 import { erc20Abi } from 'viem'
-import { readContract, waitForTransactionReceipt } from '@wagmi/core'
+import { readContract } from '@wagmi/core'
 import {
   ArrowLeft, Share2, Check, ExternalLink, UserPlus, X, CalendarClock,
   Gift, Undo2, Send, ReceiptText, Loader2, RefreshCw, AlertTriangle, HelpCircle,
@@ -49,6 +49,7 @@ import AskPayeeToConfirmButton from '@/components/AskPayeeToConfirmButton'
 import { parseLabel, encodeLabel, encodedByteLength } from '@/lib/payeeLabel'
 import { normaliseDomain } from '@/lib/verifyPayee'
 import { PRIVY_ENABLED, usePayingWith } from '@/lib/privy'
+import { useTxSender, TxError } from '@/lib/txSender'
 
 function PayingWithLine() {
   const pw = usePayingWith()
@@ -552,6 +553,7 @@ function BeneficiaryPanel({ pot, potId, payees, requests, onRefetchPayments, onR
 // ── TopUpForm ─────────────────────────────────────────────────────────────────
 function TopUpForm({ potId, onDone }: { potId: bigint; onDone: () => void }) {
   const { address } = useAccount()
+  const { send } = useTxSender()
   const [amount, setAmount] = useState('')
   const [phase, setPhase] = useState<'idle' | 'busy' | 'done' | 'failed'>('idle')
   const [txHash, setTxHash] = useState<`0x${string}` | undefined>()
@@ -575,32 +577,27 @@ function TopUpForm({ potId, onDone }: { potId: bigint; onDone: () => void }) {
     }
     setPhase('busy'); setErrMsg(undefined); setTxHash(undefined)
     try {
+      // 1. Approve if allowance is insufficient
       const allowance = await readContract(config, {
         address: USDC_ADDRESS, abi: erc20Abi, functionName: 'allowance',
         args: [address!, EARMARK_ADDRESS] as [`0x${string}`, `0x${string}`],
         chainId: EARMARK_CHAIN_ID,
       })
       if (allowance < rawAmt) {
-        const approveCall = {
-          address: USDC_ADDRESS, abi: erc20Abi, functionName: 'approve',
-          args: [EARMARK_ADDRESS, rawAmt], chainId: EARMARK_CHAIN_ID,
-        }
-        // @ts-expect-error – approveCall is valid at runtime; gas-param generics don't match statically
-        const ah = await (await import('@wagmi/core')).writeContract(config, approveCall)
-        await waitForTransactionReceipt(config, { hash: ah, chainId: EARMARK_CHAIN_ID })
+        await send(
+          { address: USDC_ADDRESS, abi: erc20Abi, functionName: 'approve', args: [EARMARK_ADDRESS, rawAmt] },
+          `Allow Earmark to move ${amount} USDC`,
+        )
       }
-      const topUpCall = {
-        address: EARMARK_ADDRESS, abi: EARMARK_ABI, functionName: 'topUp',
-        args: [potId, rawAmt], chainId: EARMARK_CHAIN_ID,
-      }
-      const { simulateContract: simulate, writeContract: write } = await import('@wagmi/core')
-      // @ts-expect-error – topUpCall is valid at runtime; gas-param generics don't match statically
-      await simulate(config, topUpCall)
-      // @ts-expect-error – topUpCall is valid at runtime; gas-param generics don't match statically
-      const hash = await write(config, topUpCall)
-      setTxHash(hash)
-      const receipt = await waitForTransactionReceipt(config, { hash, chainId: EARMARK_CHAIN_ID })
-      if (receipt.status === 'reverted') {
+
+      // 2. Top up
+      const result = await send(
+        { address: EARMARK_ADDRESS, abi: EARMARK_ABI, functionName: 'topUp', args: [potId, rawAmt] },
+        `Top up pot with ${amount} USDC`,
+      )
+      setTxHash(result.hash)
+
+      if (result.receipt.status === 'reverted') {
         setPhase('failed'); setErrMsg('Top up was reverted by the contract.')
         return
       }
@@ -609,10 +606,8 @@ function TopUpForm({ potId, onDone }: { potId: bigint; onDone: () => void }) {
       onDone()
     } catch (err) {
       setPhase('failed')
-      const msg = err instanceof Error ? err.message : String(err)
-      const s = msg.toLowerCase()
-      if (s.includes('user rejected') || s.includes('user denied') || s.includes('4001')) {
-        setErrMsg('You cancelled in your wallet. Nothing was sent.')
+      if (err instanceof TxError) {
+        setErrMsg(err.friendlyMessage)
       } else {
         setErrMsg('Something went wrong. Please try again.')
       }

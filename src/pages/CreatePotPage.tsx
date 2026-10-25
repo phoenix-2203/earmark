@@ -14,9 +14,6 @@
 import { useState, useCallback } from 'react'
 import { useAccount, useReadContract } from 'wagmi'
 import { erc20Abi } from 'viem'
-import {
-  simulateContract, writeContract, waitForTransactionReceipt,
-} from '@wagmi/core'
 import { BaseError, ContractFunctionRevertedError, UserRejectedRequestError, decodeEventLog } from 'viem'
 import { Plus, Trash2, ArrowLeft, HelpCircle } from 'lucide-react'
 import { toast } from 'sonner'
@@ -42,6 +39,7 @@ import { encodeLabel, encodedByteLength } from '@/lib/payeeLabel'
 import { normaliseDomain } from '@/lib/verifyPayee'
 import type { PayeeWalletResponse } from '@/lib/emailPayee'
 import { PRIVY_ENABLED, usePayingWith } from '@/lib/privy'
+import { useTxSender, TxError } from '@/lib/txSender'
 
 const CATEGORY_ICONS_COMP = [GraduationCap, House, HeartPulse, Briefcase, Layers]
 
@@ -97,6 +95,7 @@ function extractErr(err: unknown): string {
 
 export default function CreatePotPage({ onBack, onSuccess }: Props) {
   const { address, chainId, isConnected } = useAccount()
+  const { send } = useTxSender()
   const wrongChain = chainId !== EARMARK_CHAIN_ID
 
   // Form state
@@ -238,15 +237,11 @@ export default function CreatePotPage({ onBack, onSuccess }: Props) {
 
       if (allowance < rawAmt) {
         setTxPhase('awaitingApproval')
-        const approveHash = await writeContract(config, {
-          address: USDC_ADDRESS,
-          abi: erc20Abi,
-          functionName: 'approve',
-          args: [EARMARK_ADDRESS, rawAmt],
-          chainId: EARMARK_CHAIN_ID,
-        })
+        await send(
+          { address: USDC_ADDRESS, abi: erc20Abi, functionName: 'approve', args: [EARMARK_ADDRESS, rawAmt] },
+          `Allow Earmark to move ${amount} USDC`,
+        )
         setTxPhase('waitingApproval')
-        await waitForTransactionReceipt(config, { hash: approveHash, chainId: EARMARK_CHAIN_ID })
       }
 
       // 2. Create pot (only completed rows)
@@ -258,28 +253,26 @@ export default function CreatePotPage({ onBack, onSuccess }: Props) {
       })
 
       setTxPhase('awaitingCreate')
-      await simulateContract(config, {
-        address: EARMARK_ADDRESS,
-        abi: EARMARK_ABI,
-        functionName: 'createPot',
-        args: [beneficiary, title, category, rawAmt, expiryTs, payeeAddrs, payeeLabels],
-        chainId: EARMARK_CHAIN_ID,
-      })
-      const createHash = await writeContract(config, {
-        address: EARMARK_ADDRESS,
-        abi: EARMARK_ABI,
-        functionName: 'createPot',
-        args: [beneficiary, title, category, rawAmt, expiryTs, payeeAddrs, payeeLabels],
-        chainId: EARMARK_CHAIN_ID,
-      })
-      setTxHash(createHash)
+      const createResult = await send(
+        {
+          address: EARMARK_ADDRESS,
+          abi: EARMARK_ABI,
+          functionName: 'createPot',
+          args: [beneficiary, title, category, rawAmt, expiryTs, payeeAddrs, payeeLabels],
+        },
+        `Create pot '${title}'`,
+      )
+      setTxHash(createResult.hash)
       setTxPhase('waitingCreate')
 
-      const receipt = await waitForTransactionReceipt(config, { hash: createHash, chainId: EARMARK_CHAIN_ID })
+      // Decode potId from the PotCreated event — need the full receipt
+      const fullReceipt = await (await import('@wagmi/core')).waitForTransactionReceipt(config, {
+        hash: createResult.hash,
+        chainId: EARMARK_CHAIN_ID,
+      })
 
-      // Decode potId from the PotCreated event using the ABI (not raw topics)
       let potId: bigint | undefined
-      for (const log of receipt.logs) {
+      for (const log of fullReceipt.logs) {
         if (log.address.toLowerCase() !== EARMARK_ADDRESS.toLowerCase()) continue
         try {
           const decoded = decodeEventLog({
@@ -302,18 +295,19 @@ export default function CreatePotPage({ onBack, onSuccess }: Props) {
       if (sendFeeToRecipient && showFeeOffer && beneficiary) {
         setFeeTxPhase('awaiting')
         try {
-          const feeHash = await writeContract(config, {
-            address: USDC_ADDRESS,
-            abi: erc20Abi,
-            functionName: 'transfer',
-            args: [beneficiary, FEE_TOP_UP_AMOUNT],
-            chainId: EARMARK_CHAIN_ID,
-          })
-          setFeeTxHash(feeHash)
+          const feeResult = await send(
+            { address: USDC_ADDRESS, abi: erc20Abi, functionName: 'transfer', args: [beneficiary, FEE_TOP_UP_AMOUNT] },
+            `Send 0.05 USDC to recipient for fees`,
+          )
+          setFeeTxHash(feeResult.hash)
           setFeeTxPhase('waiting')
-          await waitForTransactionReceipt(config, { hash: feeHash, chainId: EARMARK_CHAIN_ID })
-          setFeeTxPhase('done')
-          toast.success('Fee USDC sent to recipient!')
+          if (feeResult.receipt.status === 'success') {
+            setFeeTxPhase('done')
+            toast.success('Fee USDC sent to recipient!')
+          } else {
+            setFeeTxPhase('failed')
+            toast.error('Fee transfer reverted — the pot was still created.')
+          }
         } catch {
           setFeeTxPhase('failed')
           toast.error('Fee transfer failed — the pot was still created.')
@@ -321,9 +315,13 @@ export default function CreatePotPage({ onBack, onSuccess }: Props) {
       }
     } catch (err) {
       setTxPhase('failed')
-      setTxError(extractErr(err))
+      if (err instanceof TxError) {
+        setTxError(err.friendlyMessage)
+      } else {
+        setTxError(extractErr(err))
+      }
     }
-  }, [address, beneficiary, wrongChain, amount, expiryDate, completedPayees, title, category, sendFeeToRecipient, showFeeOffer, FEE_TOP_UP_AMOUNT])
+  }, [address, beneficiary, wrongChain, amount, expiryDate, completedPayees, title, category, sendFeeToRecipient, showFeeOffer, FEE_TOP_UP_AMOUNT, send])
 
   // Map txPhase → ActionState for TxStatus component
   const actionState: ActionState =
