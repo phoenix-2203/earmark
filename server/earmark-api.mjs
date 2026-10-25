@@ -296,6 +296,23 @@ async function verifyPrivyJwt(token) {
   return payloadJson
 }
 
+// ─── Privy error logging ──────────────────────────────────────────────────────
+
+/**
+ * Log a failed Privy API call.
+ * Only logs: step name, HTTP status, and Privy's code/error fields (≤200 chars).
+ * Never logs headers, credentials, tokens, or email addresses.
+ * @param {string} step  — 'lookup' | 'create' | 'add-wallet'
+ * @param {number} status — HTTP status from Privy
+ * @param {unknown} body — parsed Privy response body
+ */
+function logPrivyError(step, status, body) {
+  const code  = typeof body === 'object' && body !== null && 'code'  in body ? String(body.code)  : ''
+  const error = typeof body === 'object' && body !== null && 'error' in body ? String(body.error) : ''
+  const detail = [code, error].filter(Boolean).join(' | ').slice(0, 200)
+  process.stderr.write(`earmark-api: privy-${step} HTTP ${status}${detail ? ` — ${detail}` : ''}\n`)
+}
+
 // ─── Privy API calls ──────────────────────────────────────────────────────────
 
 const PRIVY_TIMEOUT_MS = 10_000
@@ -377,7 +394,10 @@ async function getOrCreateWallet(email) {
     }
 
     // User exists but has no embedded wallet — create one
-    if (!userId) throw { proxyError: true }
+    if (!userId) {
+      logPrivyError('lookup', lookup.status, { error: 'user found but no id in response' })
+      throw { proxyError: true }
+    }
     const create = await privyFetch(`${PRIVY_API_V1_BASE}/v1/users/${userId}/wallets`, {
       method: 'POST',
       body: { wallets: [{ chain_type: 'ethereum' }] },
@@ -386,6 +406,7 @@ async function getOrCreateWallet(email) {
     if (create.status === 200 && newAddress) {
       return { address: newAddress, created: true }
     }
+    logPrivyError('add-wallet', create.status, create.body)
     throw { proxyError: true }
   }
 
@@ -402,10 +423,12 @@ async function getOrCreateWallet(email) {
     if ((create.status === 200 || create.status === 201) && newAddress) {
       return { address: newAddress, created: true }
     }
+    logPrivyError('create', create.status, create.body)
     throw { proxyError: true }
   }
 
   // Any other Privy status → upstream error
+  logPrivyError('lookup', lookup.status, lookup.body)
   throw { proxyError: true }
 }
 
@@ -541,7 +564,9 @@ async function handleRequest(req, res) {
       if (e && typeof e === 'object' && 'proxyError' in e) {
         return json(res, 502, { error: 'Couldn\'t reach the wallet service. Try again shortly.' })
       }
-      // Unexpected error — don't leak details
+      // Unexpected error — log message only, then return generic response
+      const msg = e instanceof Error ? e.message : String(e)
+      process.stderr.write(`earmark-api: unexpected error in payee-wallet handler — ${msg}\n`)
       return json(res, 502, { error: 'Couldn\'t reach the wallet service. Try again shortly.' })
     }
 
