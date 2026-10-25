@@ -22,7 +22,7 @@ const WHY = [
 
 export default function LandingWhyArc() {
   return (
-    <section className="py-16 md:py-20 bg-white">
+    <section className="py-16 md:py-20 bg-[var(--surface)]">
       <div className="mx-auto max-w-[1040px] px-4">
         <p className="mb-2 text-center text-xs font-semibold uppercase tracking-widest text-[var(--muted)]">
           Why Arc

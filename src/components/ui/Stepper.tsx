@@ -15,8 +15,8 @@ export function Stepper({ steps, className = '' }: StepperProps) {
         <li key={i} className="flex items-center gap-1">
           <span
             className={`flex size-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold
-              ${step.status === 'done'   ? 'bg-[var(--success)] text-white' : ''}
-              ${step.status === 'active' ? 'bg-accent text-white' : ''}
+              ${step.status === 'done'   ? 'bg-[var(--success)] text-[var(--on-accent)]' : ''}
+              ${step.status === 'active' ? 'bg-[var(--accent)] text-[var(--on-accent)]' : ''}
               ${step.status === 'pending'? 'bg-[var(--surface-2)] text-[var(--muted)]' : ''}
             `}
             aria-current={step.status === 'active' ? 'step' : undefined}

@@ -75,8 +75,6 @@ const NAV = [
 const SHELL_PAGES: Page[] = ['send', 'sent', 'received']
 // Pages that use the minimal public header (wordmark + wallet, no tab bar)
 const PUBLIC_PAGES: Page[] = ['pot', 'receipt', 'wallet']
-// Pages that render their own SiteHeader via their component (no shell from App)
-const SITE_PAGES: Page[] = ['home', 'about', 'how']
 // Pages that are standalone (no shell, no site header)
 const STANDALONE_PAGES: Page[] = ['confirm-payee', 'payee-confirmed']
 
@@ -100,7 +98,6 @@ export default function App() {
   const noContract = EARMARK_ADDRESS.length <= 2
   const showShell = SHELL_PAGES.includes(route.page)
   const showPublicHeader = PUBLIC_PAGES.includes(route.page)
-  const isSitePage = SITE_PAGES.includes(route.page)
   const isStandalone = STANDALONE_PAGES.includes(route.page)
 
   // Standalone pages render themselves completely — no shell, no headers

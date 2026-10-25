@@ -17,7 +17,7 @@ export default function LandingHero({ onSend }: Props) {
   }
 
   return (
-    <section className="bg-white py-20 md:py-24 lg:py-28">
+    <section className="bg-[var(--surface)] py-20 md:py-24 lg:py-28">
       <div className="mx-auto max-w-[640px] px-4 text-center">
         <h1
           className="display mb-5 font-semibold text-[var(--ink)] text-balance leading-tight"

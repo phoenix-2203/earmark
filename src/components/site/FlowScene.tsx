@@ -165,12 +165,12 @@ function Card({
   paidLine,
   fontSize = 15,
 }: CardProps) {
-  const stroke     = blocked ? '#B42318' : (success || accent || active) ? '#0F6B5C' : '#DCE1E6'
-  const bg         = blocked ? '#FDECEC' : (accent || success) ? '#E3F1EE' : 'white'
-  const inkMain    = blocked ? '#B42318' : '#0F2233'
-  const inkSub     = blocked ? '#B42318' : '#5B6775'
-  const inkSuccess = '#0F6B5C'
-  const iconColor  = blocked ? '#B42318' : (success || active || accent) ? '#0F6B5C' : '#5B6775'
+  const stroke     = blocked ? 'var(--danger)' : (success || accent || active) ? 'var(--accent)' : 'var(--line)'
+  const bg         = blocked ? 'var(--danger-soft)' : (accent || success) ? 'var(--accent-soft)' : 'var(--surface)'
+  const inkMain    = blocked ? 'var(--danger)' : 'var(--ink)'
+  const inkSub     = blocked ? 'var(--danger)' : 'var(--muted)'
+  const inkSuccess = 'var(--accent)'
+  const iconColor  = blocked ? 'var(--danger)' : (success || active || accent) ? 'var(--accent)' : 'var(--muted)'
   const strokeW    = (blocked || success || accent) ? 2 : 1.5
   const shadow     = (active || success || accent)
     ? 'drop-shadow(0 2px 8px rgba(15,107,92,.20))'
@@ -270,24 +270,24 @@ function PotCard({ x, y, w, h, potTitle, potAmt, currency, payeeLabels }: PotCar
     <g style={{ transition: 'all 0.3s cubic-bezier(.4,0,.2,1)' }}>
       <rect
         x={x} y={y} width={w} height={h} rx={10}
-        fill="#E3F1EE" stroke="#0F6B5C" strokeWidth={2}
+        fill="var(--accent-soft)" stroke="var(--accent)" strokeWidth={2}
         style={{ filter: 'drop-shadow(0 2px 8px rgba(15,107,92,.18))' }}
       />
       {/* Caption */}
-      <SvgText x={x + PAD} y={y + 14} fontSize={11} fill="#5B6775" fontWeight={600}>POT</SvgText>
+      <SvgText x={x + PAD} y={y + 14} fontSize={11} fill="var(--muted)" fontWeight={600}>POT</SvgText>
       {/* Lock icon + title */}
-      <SvgIcon Icon={Lock} x={iconX} y={iconRowCY} size={18} color="#0F6B5C" />
+      <SvgIcon Icon={Lock} x={iconX} y={iconRowCY} size={18} color="var(--accent)" />
       {titleLines.map((line, i) => (
-        <SvgText key={i} x={labelX} y={firstLineY + i * lineH} fontSize={15} fill="#0F2233" fontWeight={600}>
+        <SvgText key={i} x={labelX} y={firstLineY + i * lineH} fontSize={15} fill="var(--ink)" fontWeight={600}>
           {line}
         </SvgText>
       ))}
       {/* Amount (large, bold, ink) + currency label */}
-      <SvgText x={x + PAD} y={amtY} fontSize={28} fill="#0F2233" fontWeight={700}>{amtStr}</SvgText>
-      <SvgText x={usdcX}   y={amtY} fontSize={14} fill="#5B6775">{currency}</SvgText>
+      <SvgText x={x + PAD} y={amtY} fontSize={28} fill="var(--ink)" fontWeight={700}>{amtStr}</SvgText>
+      <SvgText x={usdcX}   y={amtY} fontSize={14} fill="var(--muted)">{currency}</SvgText>
       {/* Constraint note */}
       {constraintLines.map((line, i) => (
-        <SvgText key={i} x={x + PAD} y={constraintY0 + i * 15} fontSize={12} fill="#5B6775">{line}</SvgText>
+        <SvgText key={i} x={x + PAD} y={constraintY0 + i * 15} fontSize={12} fill="var(--muted)">{line}</SvgText>
       ))}
     </g>
   )
@@ -320,10 +320,10 @@ function Coin({ cx, cy, visible, shake = false }: {
         filter: 'drop-shadow(0 1px 5px rgba(15,107,92,.35))',
       }}
     >
-      <circle r={13} fill="#0F6B5C" />
+      <circle r={13} fill="var(--accent)" />
       <text
         textAnchor="middle" dominantBaseline="central"
-        fontSize={10} fill="white" fontWeight="700"
+        fontSize={10} fill="var(--on-accent)" fontWeight="700"
         fontFamily="'IBM Plex Mono',ui-monospace,Menlo,monospace"
       >$</text>
     </g>
@@ -337,7 +337,7 @@ function Barrier({ x, y1, y2, visible }: { x: number; y1: number; y2: number; vi
   return (
     <line
       x1={x} y1={y1} x2={x} y2={y2}
-      stroke="#B42318" strokeWidth={3.5} strokeLinecap="round"
+      stroke="var(--danger)" strokeWidth={3.5} strokeLinecap="round"
       style={{ animation: 'barPulse 0.5s ease-in-out 2' }}
     />
   )
@@ -679,18 +679,18 @@ export default function FlowScene({
       >
         <svg viewBox={`0 0 ${sl.vw} ${sl.vh}`} width="100%" style={{ display: 'block' }}>
           <defs><style>{CSS_KEYFRAMES}</style></defs>
-          <path d={bezierD(sl.pathFP)}  fill="none" stroke="#0F6B5C" strokeWidth={2} />
-          <path d={bezierD(sl.pathP1)}  fill="none" stroke="#0F6B5C" strokeWidth={2} />
-          <path d={bezierD(sl.pathP2)}  fill="none" stroke="#0F6B5C" strokeWidth={2} />
-          <path d={bezierD(sl.pathBLK)} fill="none" stroke="#B42318" strokeWidth={2} strokeDasharray="6 4" />
+          <path d={bezierD(sl.pathFP)}  fill="none" stroke="var(--accent)" strokeWidth={2} />
+          <path d={bezierD(sl.pathP1)}  fill="none" stroke="var(--accent)" strokeWidth={2} />
+          <path d={bezierD(sl.pathP2)}  fill="none" stroke="var(--accent)" strokeWidth={2} />
+          <path d={bezierD(sl.pathBLK)} fill="none" stroke="var(--danger)" strokeWidth={2} strokeDasharray="6 4" />
           <Card {...sl.funder}  Icon={funder.Icon}   caption="FUNDER"  title={funder.label}  active />
           <PotCard {...sl.pot} potTitle={potTitle} potAmt={amountNum} currency={curr} payeeLabels={[payees[0].label, payees[1].label]} />
           <Card {...sl.payee1} Icon={payees[0].Icon} caption="PAYEE 1" title={payees[0].label} success paidLine={`✓ Paid ${p1Amt} ${curr}`} />
           <Card {...sl.payee2} Icon={payees[1].Icon} caption="PAYEE 2" title={payees[1].label} success paidLine={`✓ Paid ${p2Amt} ${curr}`} />
           <Card {...sl.blocked} Icon={recipient.Icon} caption="BLOCKED" title={blockedLabel} blocked />
           {sl.recip && <Card {...sl.recip} Icon={recipient.Icon} caption="RECIPIENT" title={recipient.label} active />}
-          <SvgText x={sl.blockedLabel.x} y={sl.blockedLabel.y} fontSize={11} fill="#B42318" fontWeight={600} textAnchor={sl.blockedLabel.anchor}>Blocked by the contract</SvgText>
-          <SvgText x={sl.returnLabel.x}  y={sl.returnLabel.y}  fontSize={11} fill="#5B6775" textAnchor={sl.returnLabel.anchor}>Unspent money returns to the funder</SvgText>
+          <SvgText x={sl.blockedLabel.x} y={sl.blockedLabel.y} fontSize={11} fill="var(--danger)" fontWeight={600} textAnchor={sl.blockedLabel.anchor}>Blocked by the contract</SvgText>
+          <SvgText x={sl.returnLabel.x}  y={sl.returnLabel.y}  fontSize={11} fill="var(--muted)" textAnchor={sl.returnLabel.anchor}>Unspent money returns to the funder</SvgText>
         </svg>
         <div className="mt-2 flex flex-wrap gap-2 px-2 pb-2">
           {captionSteps.map(s => (
@@ -724,11 +724,11 @@ export default function FlowScene({
         <defs><style>{CSS_KEYFRAMES}</style></defs>
 
         {/* ── Paths ── */}
-        <path d={bezierD(lyt.pathFP)}   fill="none" stroke={solidFP ? '#0F6B5C' : '#DCE1E6'} strokeWidth={2} strokeDasharray={solidFP ? undefined : '6 4'} />
-        <path d={bezierD(lyt.pathP1)}   fill="none" stroke={solidP1 ? '#0F6B5C' : '#DCE1E6'} strokeWidth={2} strokeDasharray={solidP1 ? undefined : '6 4'} />
-        <path d={bezierD(lyt.pathP2)}   fill="none" stroke={solidP2 ? '#0F6B5C' : '#DCE1E6'} strokeWidth={2} strokeDasharray={solidP2 ? undefined : '6 4'} />
-        <path d={bezierD(lyt.pathBLK)}  fill="none" stroke={showCoinBlk  ? '#B42318' : '#DCE1E6'} strokeWidth={2} strokeDasharray="6 4" />
-        <path d={bezierD(lyt.pathBack)} fill="none" stroke={showCoinBack ? '#5B6775' : '#DCE1E6'} strokeWidth={2} strokeDasharray="6 4" />
+        <path d={bezierD(lyt.pathFP)}   fill="none" stroke={solidFP ? 'var(--accent)' : 'var(--line)'} strokeWidth={2} strokeDasharray={solidFP ? undefined : '6 4'} />
+        <path d={bezierD(lyt.pathP1)}   fill="none" stroke={solidP1 ? 'var(--accent)' : 'var(--line)'} strokeWidth={2} strokeDasharray={solidP1 ? undefined : '6 4'} />
+        <path d={bezierD(lyt.pathP2)}   fill="none" stroke={solidP2 ? 'var(--accent)' : 'var(--line)'} strokeWidth={2} strokeDasharray={solidP2 ? undefined : '6 4'} />
+        <path d={bezierD(lyt.pathBLK)}  fill="none" stroke={showCoinBlk  ? 'var(--danger)' : 'var(--line)'} strokeWidth={2} strokeDasharray="6 4" />
+        <path d={bezierD(lyt.pathBack)} fill="none" stroke={showCoinBack ? 'var(--muted)' : 'var(--line)'} strokeWidth={2} strokeDasharray="6 4" />
 
         {/* ── Cards (behind coins) ── */}
         <Card {...lyt.funder}
@@ -770,7 +770,7 @@ export default function FlowScene({
         {showBlkLabel && (
           <SvgText
             x={lyt.blockedLabel.x} y={lyt.blockedLabel.y}
-            fontSize={11} fill="#B42318" fontWeight={600}
+            fontSize={11} fill="var(--danger)" fontWeight={600}
             textAnchor={lyt.blockedLabel.anchor}
           >
             Blocked by the contract
@@ -779,7 +779,7 @@ export default function FlowScene({
         {showReturn && (
           <SvgText
             x={lyt.returnLabel.x} y={lyt.returnLabel.y}
-            fontSize={11} fill="#5B6775"
+            fontSize={11} fill="var(--muted)"
             textAnchor={lyt.returnLabel.anchor}
           >
             Unspent money returns to the funder
@@ -804,7 +804,7 @@ export default function FlowScene({
             className="rounded-full px-3 py-1 text-xs font-medium transition-colors focus-visible:outline-2 focus-visible:outline-[var(--focus)]"
             style={{
               background: activeStep === i ? 'var(--accent)'     : 'var(--accent-soft)',
-              color:      activeStep === i ? 'white'             : 'var(--accent)',
+              color:      activeStep === i ? 'var(--on-accent)'  : 'var(--accent)',
             }}
             aria-current={activeStep === i ? 'step' : undefined}
           >

@@ -177,7 +177,7 @@ export default function ConfirmPayeePage() {
       )}
 
       {wrongWallet && connectedAddress && (
-        <div className="mb-4 rounded-card border border-[var(--warning)] bg-[#FFF8E6] p-4 text-sm text-[var(--ink-2)]">
+        <div className="mb-4 rounded-card border border-[var(--warning)] bg-[var(--warning-soft)] p-4 text-sm text-[var(--ink-2)]">
           <p>
             <strong>This link is for wallet {shortAddr(req.payee)}</strong>{'; '}
             you're connected with {shortAddr(connectedAddress)}.

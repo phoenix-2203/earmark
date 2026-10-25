@@ -30,7 +30,7 @@ function PendingBadge({ potId }: { potId: bigint }) {
   const pending = (requests ?? []).filter((r) => !r.resolved).length
   if (pending === 0) return null
   return (
-    <span className="inline-flex items-center justify-center rounded-pill bg-[var(--info)] px-1.5 py-0.5 text-[10px] font-semibold text-white">
+    <span className="inline-flex items-center justify-center rounded-pill bg-[var(--info)] px-1.5 py-0.5 text-[10px] font-semibold text-[var(--on-accent)]">
       {pending}
     </span>
   )

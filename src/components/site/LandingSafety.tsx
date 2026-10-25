@@ -21,7 +21,7 @@ export default function LandingSafety() {
 
         <div className="grid gap-6 sm:grid-cols-2 mb-8">
           {/* Does */}
-          <div className="rounded-card border border-[var(--success)] bg-[#E6FFF4] p-5">
+          <div className="rounded-card border border-[var(--success)] bg-[var(--success-soft)] p-5">
             <div className="mb-3 flex items-center gap-2">
               <ShieldCheck className="size-5 text-[var(--success)]" aria-hidden />
               <h3 className="text-sm font-semibold text-[var(--success)]">What the contract enforces</h3>
@@ -64,7 +64,7 @@ export default function LandingSafety() {
         </div>
 
         {/* Audit banner */}
-        <div className="rounded-card border border-[#F5C6C3] bg-[#FDECEC] px-5 py-4 flex flex-wrap items-center justify-between gap-3">
+        <div className="rounded-card border border-[var(--danger-line)] bg-[var(--danger-soft)] px-5 py-4 flex flex-wrap items-center justify-between gap-3">
           <p className="text-sm text-[var(--danger)] font-medium">
             ⚠ Experimental — not independently audited. Use small amounts and treat funds as at risk.
           </p>

@@ -51,7 +51,7 @@ export default function AboutPage({ onSend, onSent, onReceived, onHow, onBack }:
       <main className="pb-16">
 
         {/* ── Hero ── */}
-        <section className="bg-white py-14 md:py-20 border-b border-[var(--line)]">
+        <section className="bg-[var(--surface)] py-14 md:py-20 border-b border-[var(--line)]">
           <div className="mx-auto max-w-[720px] px-4 text-center">
             <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-[var(--muted)]">About Earmark</p>
             <h1
@@ -95,7 +95,7 @@ export default function AboutPage({ onSend, onSent, onReceived, onHow, onBack }:
         </section>
 
         {/* ── Who it's for ── */}
-        <section className="py-14 bg-white">
+        <section className="py-14 bg-[var(--surface)]">
           <div className="mx-auto max-w-[1040px] px-4">
             <h2 className="display mb-8 text-xl font-semibold text-[var(--ink)]" style={{ letterSpacing: '-0.02em' }}>
               Who it's for
@@ -197,7 +197,7 @@ export default function AboutPage({ onSend, onSent, onReceived, onHow, onBack }:
         </section>
 
         {/* ── Roadmap ── */}
-        <section id="roadmap" className="py-14 bg-white scroll-mt-16">
+        <section id="roadmap" className="py-14 bg-[var(--surface)] scroll-mt-16">
           <div className="mx-auto max-w-[720px] px-4">
             <div className="mb-2 flex items-center gap-2">
               <h2 className="display text-xl font-semibold text-[var(--ink)]" style={{ letterSpacing: '-0.02em' }}>

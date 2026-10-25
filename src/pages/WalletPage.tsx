@@ -402,7 +402,7 @@ function PrivyWalletContent({ onBack, onSignIn }: Props) {
             </Button>
           ) : (
             <div className="space-y-3">
-              <div className="flex gap-2 rounded-card border border-[#F5C6C3] bg-[#FDECEC] p-3">
+              <div className="flex gap-2 rounded-card border border-[var(--danger-line)] bg-[var(--danger-soft)] p-3">
                 <AlertTriangle className="mt-0.5 size-4 shrink-0 text-danger" aria-hidden />
                 <p className="text-xs text-danger leading-relaxed">
                   <strong>Anyone with this key controls your money.</strong> Never share it with anyone.

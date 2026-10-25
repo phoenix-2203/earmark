@@ -17,7 +17,7 @@ export default function NetworkGuard() {
     <div
       role="alert"
       className="mx-4 mb-4 flex items-center gap-3 rounded-card p-4 border"
-      style={{ background: '#FDECEC', borderColor: '#F5C6C3' }}
+      style={{ background: 'var(--danger-soft)', borderColor: 'var(--danger-line)' }}
     >
       <AlertTriangle className="size-5 shrink-0 text-danger" aria-hidden />
       <p className="flex-1 text-sm text-[var(--ink)]">

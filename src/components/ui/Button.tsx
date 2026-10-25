@@ -18,9 +18,9 @@ const BASE =
   'disabled:cursor-not-allowed disabled:opacity-40 select-none'
 
 const VARIANTS: Record<ButtonVariant, string> = {
-  primary:   'bg-accent text-white hover:bg-[var(--accent-hover)]',
+  primary:   'bg-[var(--accent)] text-[var(--on-accent)] hover:bg-[var(--accent-hover)]',
   secondary: 'bg-[var(--surface-2)] text-[var(--ink)] hover:bg-[var(--line)]',
-  danger:    'bg-danger text-white hover:opacity-90',
+  danger:    'bg-[var(--danger)] text-[var(--on-accent)] hover:opacity-90',
   ghost:     'bg-transparent text-[var(--ink)] hover:bg-[var(--surface-2)]',
 }
 

@@ -30,7 +30,7 @@ const STEPS = [
 
 export default function LandingHow() {
   return (
-    <section id="how" className="py-16 md:py-20 bg-white scroll-mt-16">
+    <section id="how" className="py-16 md:py-20 bg-[var(--surface)] scroll-mt-16">
       <div className="mx-auto max-w-[1040px] px-4">
         <p className="mb-2 text-center text-xs font-semibold uppercase tracking-widest text-[var(--muted)]">
           How it works

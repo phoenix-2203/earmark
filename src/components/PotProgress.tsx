@@ -43,7 +43,7 @@ export default function PotProgress({ pot }: Props) {
           Closed
         </span>
       ) : expired ? (
-        <span className="inline-block rounded-pill px-2 py-0.5 text-xs font-medium bg-[#FFF4E0] text-[var(--warning)]">
+        <span className="inline-block rounded-pill px-2 py-0.5 text-xs font-medium bg-[var(--warning-soft)] text-[var(--warning)]">
           Ended — reclaim available
         </span>
       ) : (

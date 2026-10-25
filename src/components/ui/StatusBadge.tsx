@@ -4,12 +4,12 @@ import { clsx } from 'clsx'
 export type Status = 'Open' | 'Ended' | 'Closed' | 'Pending' | 'Approved' | 'Rejected'
 
 const CONFIG: Record<Status, { icon: React.ComponentType<{ className?: string }>; cls: string; label: string }> = {
-  Open:     { icon: CheckCircle2, cls: 'bg-[#E3F1EE] text-[var(--success)]',  label: 'Open' },
-  Ended:    { icon: AlertCircle,  cls: 'bg-[#FFF4E0] text-[var(--warning)]',   label: 'Ended' },
-  Closed:   { icon: XCircle,     cls: 'bg-[var(--surface-2)] text-[var(--muted)]', label: 'Closed' },
-  Pending:  { icon: Clock,       cls: 'bg-[#E6F0FF] text-[var(--info)]',       label: 'Pending' },
-  Approved: { icon: CheckCircle2,cls: 'bg-[#E3F1EE] text-[var(--success)]',   label: 'Approved' },
-  Rejected: { icon: XCircle,     cls: 'bg-[#FDECEC] text-[var(--danger)]',     label: 'Rejected' },
+  Open:     { icon: CheckCircle2, cls: 'bg-[var(--success-soft)] text-[var(--success)]',  label: 'Open' },
+  Ended:    { icon: AlertCircle,  cls: 'bg-[var(--warning-soft)] text-[var(--warning)]',   label: 'Ended' },
+  Closed:   { icon: XCircle,     cls: 'bg-[var(--surface-2)] text-[var(--muted)]',         label: 'Closed' },
+  Pending:  { icon: Clock,       cls: 'bg-[var(--info-soft)] text-[var(--info)]',           label: 'Pending' },
+  Approved: { icon: CheckCircle2,cls: 'bg-[var(--success-soft)] text-[var(--success)]',   label: 'Approved' },
+  Rejected: { icon: XCircle,     cls: 'bg-[var(--danger-soft)] text-[var(--danger)]',      label: 'Rejected' },
 }
 
 // Fallback for unknown statuses

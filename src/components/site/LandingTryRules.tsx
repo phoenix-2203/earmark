@@ -95,8 +95,8 @@ export default function LandingTryRules() {
                 className={`w-full flex items-center justify-between px-5 py-3.5 text-left text-sm transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-[var(--focus)]
                   ${selected === i
                     ? t.result === 'allowed'
-                      ? 'bg-[#E6FFF4]'
-                      : 'bg-[#FDECEC]'
+                      ? 'bg-[var(--success-soft)]'
+                      : 'bg-[var(--danger-soft)]'
                     : 'hover:bg-[var(--surface-2)]'
                   }`}
               >
@@ -117,8 +117,8 @@ export default function LandingTryRules() {
             <div
               className={`border-t px-5 py-4 text-sm ${
                 test.result === 'allowed'
-                  ? 'border-[var(--success)] bg-[#E6FFF4] text-[var(--success)]'
-                  : 'border-[var(--danger)] bg-[#FDECEC] text-[var(--danger)]'
+                  ? 'border-[var(--success)] bg-[var(--success-soft)] text-[var(--success)]'
+                  : 'border-[var(--danger)] bg-[var(--danger-soft)] text-[var(--danger)]'
               }`}
               aria-live="polite"
             >

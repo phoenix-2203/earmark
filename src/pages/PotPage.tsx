@@ -378,8 +378,8 @@ function SenderPanel({ pot, potId, payees, requests, pendingCount, onRefetchPaye
       {!pot.closed && (
         <>
           {pendingCount > 0 && (
-            <div className="flex items-center gap-2 rounded-input bg-[#E6F0FF] px-3 py-2">
-              <span className="inline-flex size-5 items-center justify-center rounded-full bg-[var(--info)] text-[10px] font-semibold text-white">{pendingCount}</span>
+            <div className="flex items-center gap-2 rounded-input bg-[var(--info-soft)] px-3 py-2">
+              <span className="inline-flex size-5 items-center justify-center rounded-full bg-[var(--info)] text-[10px] font-semibold text-[var(--on-accent)]">{pendingCount}</span>
               <span className="text-xs font-medium text-[var(--info)]">
                 {pendingCount} payee request{pendingCount > 1 ? 's' : ''} waiting for your review
               </span>
@@ -482,7 +482,7 @@ function BeneficiaryPanel({ pot, potId, payees, requests, onRefetchPayments, onR
   const canPay = !pot.closed && !expired && pot.balance > 0n && payees.length > 0
 
   return (
-    <Card padding="md" className="mb-4 space-y-4 border-[#E6F0FF] bg-[#E6F0FF]">
+    <Card padding="md" className="mb-4 space-y-4 border-[var(--info-soft)] bg-[var(--info-soft)]">
       <h2 className="text-xs font-semibold uppercase tracking-widest text-[var(--info)]">Your actions</h2>
 
       {pot.closed && <p className="text-xs text-[var(--muted)]">This pot is closed.</p>}
