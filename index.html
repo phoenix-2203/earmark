@@ -4,9 +4,21 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
+    <!-- Theme flash prevention: apply saved theme before first paint -->
+    <script>
+      (function () {
+        try {
+          var t = localStorage.getItem('earmark.theme')
+          if (t === 'dark' || t === 'light') document.documentElement.setAttribute('data-theme', t)
+          else document.documentElement.removeAttribute('data-theme')
+        } catch (_) {}
+      })()
+    </script>
+
     <title>Earmark — Money with a purpose</title>
     <meta name="description" content="Fund a pot in USDC that can only pay the people you approve. Every payment leaves a public receipt on Arc." />
     <meta name="theme-color" content="#0F6B5C" />
+    <meta name="theme-color" content="#0B141C" media="(prefers-color-scheme: dark)" />
 
     <!-- Favicons -->
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />

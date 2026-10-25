@@ -2,42 +2,127 @@
 @tailwind components;
 @tailwind utilities;
 
-/* ─── Design tokens ──────────────────────────────────────────────────────── */
+/* ─── Design tokens — light theme ───────────────────────────────────────────── */
 :root {
+  color-scheme: light;
+
   /* Surfaces */
   --bg:          #F5F6F8;
   --surface:     #FFFFFF;
   --surface-2:   #EEF1F4;
   --line:        #DCE1E6;
+  --border-strong: #8997A5;
 
   /* Text */
   --ink:         #0F2233;
   --ink-2:       #3C4B5A;
-  --muted:       #5B6775;   /* ≥4.5:1 on white */
+  --muted:       #5B6775;
 
   /* Brand */
   --accent:      #0F6B5C;
   --accent-hover:#0B5548;
   --accent-soft: #E3F1EE;
   --focus:       #2E7D6F;
+  --on-accent:   #FFFFFF;
 
   /* Semantic */
-  --success:     #157A55;
-  --warning:     #9A5B07;
-  --danger:      #B42318;
-  --info:        #175CD3;
+  --success:        #157A55;
+  --warning:        #9A5B07;
+  --danger:         #B42318;
+  --info:           #175CD3;
+  --success-soft:   #E6FFF4;
+  --warning-soft:   #FFF4E0;
+  --danger-soft:    #FDECEC;
+  --danger-line:    #F5C6C3;
+  --info-soft:      #E6F0FF;
 
-  /* Legacy aliases kept so older components still compile */
+  /* Legacy aliases — kept so older components still compile */
   --bg-gradient:     #F5F6F8;
   --border:          #DCE1E6;
-  --border-strong:   #8997A5;
   --accent-hover-old:#0B5548;
   --subtle:          #5B6775;
   --surface-muted:   #EEF1F4;
   --surface-strong:  #FFFFFF;
 }
 
-/* ─── Reset & base ───────────────────────────────────────────────────────── */
+/* ─── Design tokens — dark theme ────────────────────────────────────────────── */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+
+    --bg:          #0B141C;
+    --surface:     #111D27;
+    --surface-2:   #172633;
+    --line:        #243545;
+    --border-strong: #3A5063;
+
+    --ink:         #E8EEF3;
+    --ink-2:       #B8C4CF;
+    --muted:       #8E9BA8;
+
+    --accent:      #4CC2A6;
+    --accent-hover:#6FD3BA;
+    --accent-soft: #12332D;
+    --focus:       #6FD3BA;
+    --on-accent:   #062B23;
+
+    --success:        #4CC38A;
+    --warning:        #E0A23B;
+    --danger:         #F27A6E;
+    --info:           #6EA8FF;
+    --success-soft:   #10301F;
+    --warning-soft:   #3A2A0E;
+    --danger-soft:    #3A1614;
+    --danger-line:    #6B2A25;
+    --info-soft:      #13243F;
+
+    --bg-gradient:     #0B141C;
+    --border:          #243545;
+    --accent-hover-old:#6FD3BA;
+    --subtle:          #8E9BA8;
+    --surface-muted:   #172633;
+    --surface-strong:  #111D27;
+  }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --bg:          #0B141C;
+  --surface:     #111D27;
+  --surface-2:   #172633;
+  --line:        #243545;
+  --border-strong: #3A5063;
+
+  --ink:         #E8EEF3;
+  --ink-2:       #B8C4CF;
+  --muted:       #8E9BA8;
+
+  --accent:      #4CC2A6;
+  --accent-hover:#6FD3BA;
+  --accent-soft: #12332D;
+  --focus:       #6FD3BA;
+  --on-accent:   #062B23;
+
+  --success:        #4CC38A;
+  --warning:        #E0A23B;
+  --danger:         #F27A6E;
+  --info:           #6EA8FF;
+  --success-soft:   #10301F;
+  --warning-soft:   #3A2A0E;
+  --danger-soft:    #3A1614;
+  --danger-line:    #6B2A25;
+  --info-soft:      #13243F;
+
+  --bg-gradient:     #0B141C;
+  --border:          #243545;
+  --accent-hover-old:#6FD3BA;
+  --subtle:          #8E9BA8;
+  --surface-muted:   #172633;
+  --surface-strong:  #111D27;
+}
+
+/* ─── Reset & base ───────────────────────────────────────────────────────────── */
 *, *::before, *::after { box-sizing: border-box; }
 
 html { scroll-behavior: smooth; }
@@ -53,18 +138,18 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* ─── Typography helpers ─────────────────────────────────────────────────── */
+/* ─── Typography helpers ─────────────────────────────────────────────────────── */
 .display { font-family: 'IBM Plex Sans', 'Space Grotesk', sans-serif; font-weight: 600; letter-spacing: -0.02em; }
 .mono    { font-family: 'IBM Plex Mono', 'JetBrains Mono', Menlo, monospace; font-variant-numeric: tabular-nums; }
 
-/* ─── Focus ring (visible only on keyboard nav) ──────────────────────────── */
+/* ─── Focus ring (visible only on keyboard nav) ──────────────────────────────── */
 :focus-visible {
   outline: 2px solid var(--focus);
   outline-offset: 2px;
   border-radius: 4px;
 }
 
-/* ─── Motion guard ───────────────────────────────────────────────────────── */
+/* ─── Motion guard ───────────────────────────────────────────────────────────── */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;
@@ -72,28 +157,34 @@ body {
   }
 }
 
-/* ─── Colour transitions (150 ms only) ──────────────────────────────────── */
+/* ─── Colour transitions (150 ms only) ──────────────────────────────────────── */
 a, button { transition: color 150ms, background-color 150ms, border-color 150ms, opacity 150ms; }
 
-/* ─── Sonner toast overrides ─────────────────────────────────────────────── */
+/* ─── Sonner toast overrides ─────────────────────────────────────────────────── */
 [data-sonner-toaster] { font-family: 'IBM Plex Sans', 'DM Sans', sans-serif !important; }
 
-/* ─── Watermark: on mobile raise it above the 56px tab bar ──────────────── */
+/* ─── Watermark: on mobile raise it above the 56px tab bar ──────────────────── */
 @media (max-width: 767px) {
   .arc-studio-watermark { bottom: 72px !important; }
 }
 
-/* ─── Landing page animations ───────────────────────────────────────────── */
+/* ─── Landing page animations ───────────────────────────────────────────────── */
 @keyframes fadeInUp {
   from { opacity: 0; transform: translateY(6px); }
   to   { opacity: 1; transform: translateY(0); }
 }
 
-/* ─── FAQ chevron (details/summary) ─────────────────────────────────────── */
+/* ─── FAQ chevron (details/summary) ─────────────────────────────────────────── */
 details summary::-webkit-details-marker { display: none; }
 details[open] > summary .chevron-icon { transform: rotate(180deg); }
 
-/* ─── Print stylesheet (receipt page) ───────────────────────────────────── */
+/* ─── how-earmark-works.svg: force light background in dark mode ─────────────── */
+.how-it-works-diagram {
+  background: #FFFFFF;
+  border-radius: 12px;
+}
+
+/* ─── Print stylesheet (receipt page) ───────────────────────────────────────── */
 @media print {
   /* Hide everything except the receipt card */
   body > * { display: none !important; }
