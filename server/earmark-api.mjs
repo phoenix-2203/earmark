@@ -395,7 +395,7 @@ async function getOrCreateWallet(email) {
       method: 'POST',
       body: {
         linked_accounts: [{ type: 'email', address: email }],
-        wallets: [{ chain_type: 'ethereum', wallet_index: 0 }],
+        wallets: [{ chain_type: 'ethereum' }],
       },
     })
     const newAddress = findEmbeddedWallet(create.body?.linked_accounts)
