@@ -16,8 +16,8 @@ interface Props {
 }
 
 const STYLES = {
-  primary: { background: 'var(--accent)', color: 'white' },
-  danger: { background: 'var(--danger)', color: 'white' },
+  primary: { background: 'var(--accent)', color: 'var(--on-accent)' },
+  danger:  { background: 'var(--danger)', color: 'var(--on-accent)' },
   ghost: { background: 'var(--surface-muted)', color: 'var(--ink)' },
 }
 

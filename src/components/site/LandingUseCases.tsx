@@ -187,7 +187,7 @@ export default function LandingUseCases() {
               style={{
                 background:  active === i ? 'var(--accent)'  : 'var(--surface)',
                 borderColor: active === i ? 'var(--accent)'  : 'var(--line)',
-                color:       active === i ? 'white'          : 'var(--ink-2)',
+                color:       active === i ? 'var(--on-accent)' : 'var(--ink-2)',
               }}
             >
               {c.label}
