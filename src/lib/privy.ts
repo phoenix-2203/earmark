@@ -48,21 +48,25 @@ export const PRIVY_VIEM_CHAIN = defineChain({
   },
 })
 
-export const privyConfig: PrivyClientConfig = {
-  loginMethods: ['google', 'email', 'wallet'],
-  embeddedWallets: {
-    ethereum: {
-      createOnLogin: 'users-without-wallets',
+export function makePrivyConfig(theme: 'light' | 'dark'): PrivyClientConfig {
+  return {
+    loginMethods: ['google', 'email', 'wallet'],
+    embeddedWallets: {
+      ethereum: {
+        createOnLogin: 'users-without-wallets',
+      },
     },
-  },
-  defaultChain: PRIVY_VIEM_CHAIN,
-  supportedChains: [PRIVY_VIEM_CHAIN],
-  appearance: {
-    theme: 'light',
-    accentColor: '#0F6B5C',
-    // no logo — keeps Privy modal clean
-  },
+    defaultChain: PRIVY_VIEM_CHAIN,
+    supportedChains: [PRIVY_VIEM_CHAIN],
+    appearance: {
+      theme,
+      accentColor: theme === 'dark' ? '#4CC2A6' : '#0F6B5C',
+    },
+  }
 }
+
+/** Static default config (light). Use makePrivyConfig(effectiveTheme) when theme-aware. */
+export const privyConfig: PrivyClientConfig = makePrivyConfig('light')
 
 /**
  * usePrivyReady — wraps usePrivy and adds a 10 s timeout.

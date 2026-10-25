@@ -20,7 +20,8 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { Toaster } from 'sonner'
 import App from './App'
 import './index.css'
-import { PRIVY_ENABLED, PRIVY_APP_ID, PRIVY_VIEM_CHAIN, privyConfig } from './lib/privy'
+import { PRIVY_ENABLED, PRIVY_APP_ID, PRIVY_VIEM_CHAIN, makePrivyConfig } from './lib/privy'
+import { useEffectiveTheme } from './lib/theme'
 
 // Studio logo SVG
 const StudioLogo = () => (
@@ -133,16 +134,27 @@ if (PRIVY_ENABLED) {
       </WagmiProvider>
     )
 
+    // PrivyThemeWrapper — reads the effective theme and passes a reactive config
+    // to PrivyProvider so the modal matches the user's current theme.
+    function PrivyThemeWrapper({ children }: { children: ReactNode }) {
+      const effectiveTheme = useEffectiveTheme()
+      return (
+        <PrivyProvider appId={PRIVY_APP_ID} config={makePrivyConfig(effectiveTheme)}>
+          {children}
+        </PrivyProvider>
+      )
+    }
+
     createRoot(document.getElementById('root')!).render(
       <StrictMode>
         <PrivyErrorBoundary fallback={connectKitFallback}>
-          <PrivyProvider appId={PRIVY_APP_ID} config={privyConfig}>
+          <PrivyThemeWrapper>
             <QueryClientProvider client={queryClient}>
               <PrivyWagmiProvider config={privyWagmiConfig}>
                 <AppTree />
               </PrivyWagmiProvider>
             </QueryClientProvider>
-          </PrivyProvider>
+          </PrivyThemeWrapper>
         </PrivyErrorBoundary>
       </StrictMode>,
     )

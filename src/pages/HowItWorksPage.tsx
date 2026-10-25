@@ -94,7 +94,7 @@ export default function HowItWorksPage({ onBack, onSend, onAbout }: Props) {
             <img
               src="/how-earmark-works.svg"
               alt="Diagram: the funder locks USDC in a pot; the recipient can pay only approved payees; payments to anyone else are blocked; every payment leaves a public receipt; unspent money returns to the funder."
-              className="w-full"
+              className="w-full how-it-works-diagram"
               loading="lazy"
             />
             <p className="mt-3 text-right md:hidden">
