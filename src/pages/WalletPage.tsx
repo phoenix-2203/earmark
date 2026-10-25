@@ -11,8 +11,8 @@
  * for non-Privy builds or unauthenticated users.
  */
 
-import { useState, useCallback } from 'react'
-import { useAccount, useReadContract } from 'wagmi'
+import { useState } from 'react'
+import { useReadContract } from 'wagmi'
 import { erc20Abi, isAddress, getAddress } from 'viem'
 import { writeContract, waitForTransactionReceipt } from '@wagmi/core'
 import { Copy, ExternalLink, Download, QrCode, ArrowLeft, AlertTriangle, Send } from 'lucide-react'
@@ -61,20 +61,25 @@ function PrivyWalletContent({ onBack, onSignIn }: Props) {
   const privy = usePrivy()
   const { ready, timedOut } = usePrivyReady()
   const { exportWallet } = useExportWallet()
-  const { address: connectedAddress } = useAccount()
+  // useAccount gives us the currently active wagmi wallet (may be MetaMask etc.).
+  // Display always uses the embedded wallet; useAccount is kept for the send flow in B4.
 
-  // Detect the Privy-managed embedded wallet (walletClientType === 'privy')
+  // The Privy-managed embedded wallet — this is always the user's Earmark wallet.
   const embeddedWallet = privy.user?.linkedAccounts?.find(
     (a) => a.type === 'wallet' && 'walletClientType' in a && a.walletClientType === 'privy',
-  ) as { address: string } | undefined
+  ) as { address: `0x${string}` } | undefined
 
+  // Always display and query the embedded wallet address, never the active extension wallet.
+  const walletAddress = embeddedWallet?.address ?? undefined
+
+  // Read balance for the embedded wallet address (not the active wagmi account).
   const { data: usdcBalance, refetch: refetchBalance } = useReadContract({
     address: USDC_ADDRESS,
     abi: erc20Abi,
     functionName: 'balanceOf',
-    args: connectedAddress ? [connectedAddress] : undefined,
+    args: walletAddress ? [walletAddress] : undefined,
     chainId: EARMARK_CHAIN_ID,
-    query: { enabled: !!connectedAddress, refetchInterval: 15_000 },
+    query: { enabled: !!walletAddress, refetchInterval: 15_000 },
   })
 
   // ── QR code state ──
@@ -82,9 +87,9 @@ function PrivyWalletContent({ onBack, onSignIn }: Props) {
   const [showQr, setShowQr] = useState(false)
 
   async function handleShowQr() {
-    if (!connectedAddress) return
+    if (!walletAddress) return
     if (!qrDataUrl) {
-      const url = await QRCode.toDataURL(connectedAddress, { width: 200, margin: 2 })
+      const url = await QRCode.toDataURL(walletAddress, { width: 200, margin: 2 })
       setQrDataUrl(url)
     }
     setShowQr((v) => !v)
@@ -102,7 +107,7 @@ function PrivyWalletContent({ onBack, onSignIn }: Props) {
     ? usdcBalance - GAS_RESERVE
     : 0n
 
-  const handleSend = useCallback(async () => {
+  async function handleSend() {
     const errs: Record<string, string> = {}
     const toTrimmed = sendTo.trim()
     if (!isAddress(toTrimmed)) errs.to = 'Enter a valid wallet address.'
@@ -141,7 +146,7 @@ function PrivyWalletContent({ onBack, onSignIn }: Props) {
       const msg = err instanceof Error ? err.message : String(err)
       setSendTxError(msg.includes('rejected') || msg.includes('4001') ? 'You cancelled in your wallet.' : 'Transaction failed. Try again.')
     }
-  }, [sendTo, sendAmount, maxSendable, refetchBalance])
+  }
 
   const sendActionState: ActionState =
     sendPhase === 'awaiting' ? 'awaitingSignature' :
@@ -198,7 +203,7 @@ function PrivyWalletContent({ onBack, onSignIn }: Props) {
   }
 
   const email = (privy.user?.email as { address?: string } | null | undefined)?.address ?? null
-  const displayName = email ?? (connectedAddress ? shortAddr(connectedAddress) : 'Your wallet')
+  const displayName = email ?? (walletAddress ? shortAddr(walletAddress) : 'Your wallet')
 
   return (
     <PageShell onBack={onBack}>
@@ -215,14 +220,14 @@ function PrivyWalletContent({ onBack, onSignIn }: Props) {
 
         <div>
           <p className="text-xs text-[var(--muted)] mb-1">Wallet address</p>
-          {connectedAddress ? (
+          {walletAddress ? (
             <div className="space-y-2">
               <p className="font-mono text-sm text-[var(--ink)] break-all tracking-wide">
-                {connectedAddress.match(/.{1,4}/g)?.join(' ')}
+                {walletAddress.match(/.{1,4}/g)?.join(' ')}
               </p>
               <div className="flex flex-wrap gap-2">
                 <button
-                  onClick={() => { void navigator.clipboard.writeText(connectedAddress); toast.success('Address copied!') }}
+                  onClick={() => { void navigator.clipboard.writeText(walletAddress); toast.success('Address copied!') }}
                   className="inline-flex items-center gap-1.5 text-xs font-medium text-[var(--accent)] hover:underline focus-visible:outline-2 focus-visible:outline-[var(--focus)] rounded"
                 >
                   <Copy className="size-3.5" aria-hidden /> Copy
@@ -234,7 +239,7 @@ function PrivyWalletContent({ onBack, onSignIn }: Props) {
                   <QrCode className="size-3.5" aria-hidden /> {showQr ? 'Hide QR' : 'Show QR'}
                 </button>
                 <a
-                  href={`${EARMARK_CHAIN.explorerBase}/address/${connectedAddress}`}
+                  href={`${EARMARK_CHAIN.explorerBase}/address/${walletAddress}`}
                   target="_blank"
                   rel="noreferrer"
                   className="inline-flex items-center gap-1.5 text-xs font-medium text-[var(--muted)] hover:text-[var(--ink)] focus-visible:outline-2 focus-visible:outline-[var(--focus)] rounded"
@@ -245,7 +250,7 @@ function PrivyWalletContent({ onBack, onSignIn }: Props) {
               {showQr && qrDataUrl && (
                 <img
                   src={qrDataUrl}
-                  alt={`QR code for wallet ${connectedAddress}`}
+                  alt={`QR code for wallet ${walletAddress}`}
                   className="mx-auto rounded-lg border border-[var(--line)] p-2 bg-white"
                   width={200}
                   height={200}
@@ -253,7 +258,7 @@ function PrivyWalletContent({ onBack, onSignIn }: Props) {
               )}
             </div>
           ) : (
-            <p className="text-sm text-[var(--muted)]">Connecting…</p>
+            <p className="text-sm text-[var(--muted)]">No Earmark wallet yet…</p>
           )}
         </div>
 
