@@ -183,13 +183,32 @@ function layoutEngine(
 
   // ── SECTION 1: Header ──────────────────────────────────────────────────────
 
-  // Wordmark
+  // Ledger-E mark + "earmark" wordmark, drawn as a centred unit
+  // Bars in a 64-unit grid at scale=1: (10,10,44,10), (10,27,30,10), (10,44,44,10), rx=5
+  // Mark bounding box: 54×54px (x0..54, y0..54 after shifting origin)
+  const MARK_W = 54, MARK_H = 54, MARK_RX = 5
   ctx.letterSpacing = '-0.5px'
   ctx.font = `700 36px ${SANS}`
+  const textW = ctx.measureText('earmark').width
+  const GAP   = 14
+  const groupW = MARK_W + GAP + textW
+  const gx = W / 2 - groupW / 2    // left edge of group
+  const markOriginY = y - MARK_H + 4  // align mark baseline with text baseline (~4px fudge)
+
   if (draw) {
-    ctx.textAlign = 'center'
+    // Outer bar top: x=gx+10, y=markOriginY+10, w=44, h=10, rx=5
     ctx.fillStyle = T.accent
-    ctx.fillText('Earmark', W / 2, y)
+    roundRect(ctx, gx + 10, markOriginY + 10, 44, 10, MARK_RX); ctx.fill()
+    // Middle bar (mint): x=gx+10, y=markOriginY+27, w=30, h=10, rx=5
+    ctx.fillStyle = '#7CC4B4'
+    roundRect(ctx, gx + 10, markOriginY + 27, 30, 10, MARK_RX); ctx.fill()
+    // Outer bar bottom: x=gx+10, y=markOriginY+44, w=44, h=10, rx=5
+    ctx.fillStyle = T.accent
+    roundRect(ctx, gx + 10, markOriginY + 44, 44, 10, MARK_RX); ctx.fill()
+    // "earmark" wordmark text
+    ctx.textAlign = 'left'
+    ctx.fillStyle = T.accent
+    ctx.fillText('earmark', gx + MARK_W + GAP, y)
   }
   y += 36 + 18
 

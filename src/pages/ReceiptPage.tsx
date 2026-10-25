@@ -4,7 +4,7 @@
  * Supports: Download PNG, Share (mobile), Print / Save as PDF.
  */
 import {
-  ArrowLeft, CheckCircle2, ExternalLink, Copy, Check,
+  ArrowLeft, ExternalLink, Copy, Check,
   Loader2, Download, Share2, Printer,
 } from 'lucide-react'
 import { useState, useCallback } from 'react'
@@ -205,8 +205,8 @@ export default function ReceiptPage({ potId, paymentIndex, onBack }: Props) {
 
         {/* Header */}
         <div className="mb-8 text-center">
-          <div className="mx-auto mb-4 flex size-14 items-center justify-center rounded-full bg-[var(--accent-soft)]">
-            <CheckCircle2 className="size-7 text-[var(--success)]" aria-hidden />
+          <div className="mb-4 flex justify-center">
+            <img src="/earmark-mark.svg" alt="" aria-hidden className="h-10 w-auto" />
           </div>
           <h1 className="display text-2xl font-semibold text-[var(--ink)]">Payment receipt</h1>
           <p className="mt-1 text-xs text-[var(--muted)]">Verified on {EARMARK_CHAIN.name}</p>
