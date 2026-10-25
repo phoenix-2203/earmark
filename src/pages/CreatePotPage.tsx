@@ -41,6 +41,7 @@ import AskPayeeToConfirmButton from '@/components/AskPayeeToConfirmButton'
 import { encodeLabel, encodedByteLength } from '@/lib/payeeLabel'
 import { normaliseDomain } from '@/lib/verifyPayee'
 import type { PayeeWalletResponse } from '@/lib/emailPayee'
+import { PRIVY_ENABLED, usePayingWith } from '@/lib/privy'
 
 const CATEGORY_ICONS_COMP = [GraduationCap, House, HeartPulse, Briefcase, Layers]
 
@@ -54,6 +55,19 @@ interface PayeeRow {
   label: string
   website: string   // raw user input; normalised before encoding
   emailData?: PayeeWalletResponse
+}
+
+/** One-liner shown on all transaction forms: "Paying with Earmark wallet 0x12…34 · 5.00 USDC" */
+function PayingWithLine() {
+  const pw = usePayingWith()
+  if (!PRIVY_ENABLED || !pw.address) return null
+  return (
+    <p className="text-xs text-[var(--muted)]">
+      Paying with <span className="font-medium text-[var(--ink-2)]">{pw.label}</span>
+      {pw.shortAddress && <span className="font-mono"> {pw.shortAddress}</span>}
+      {' · '}{pw.balanceLabel} USDC
+    </p>
+  )
 }
 
 interface Props {
@@ -431,6 +445,7 @@ export default function CreatePotPage({ onBack, onSuccess }: Props) {
           </p>
         </Card>
 
+        <PayingWithLine />
         <Button size="lg" className="w-full" onClick={() => void handleCreate()}>
           Create pot
         </Button>
@@ -692,6 +707,7 @@ export default function CreatePotPage({ onBack, onSuccess }: Props) {
           ))}
         </Card>
 
+        <PayingWithLine />
         <Button
           size="lg"
           className="w-full"

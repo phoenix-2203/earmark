@@ -9,13 +9,12 @@
 
 import { useState, useRef, useEffect } from 'react'
 import { ConnectKitButton } from 'connectkit'
-import { ChevronDown, Wallet, LogOut } from 'lucide-react'
+import { ChevronDown, Wallet, LogOut, CreditCard, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
-import { PRIVY_ENABLED, usePrivyReady } from '@/lib/privy'
+import { PRIVY_ENABLED, usePrivyReady, usePayingWith } from '@/lib/privy'
 import { shortAddr } from '@/utils/format'
-// usePrivy is imported unconditionally; we only call it inside PrivySignInButton
-// which is only rendered when PRIVY_ENABLED is true.
-import { usePrivy } from '@privy-io/react-auth'
+import { usePrivy, useWallets } from '@privy-io/react-auth'
+import { useSetActiveWallet } from '@privy-io/wagmi'
 
 interface Props {
   onWallet: () => void
@@ -30,13 +29,23 @@ export default function SignInButton({ onWallet }: Props) {
   return <PrivySignInButton onWallet={onWallet} />
 }
 
-/** Inner component — only rendered when PRIVY_ENABLED, so usePrivy is
+/** Inner component — only rendered when PRIVY_ENABLED, so all hooks are
  *  always called unconditionally here (no rules-of-hooks violation). */
 function PrivySignInButton({ onWallet }: Props) {
   const { ready, timedOut } = usePrivyReady()
   const { authenticated, login, logout, user } = usePrivy()
+  const { wallets } = useWallets()
+  const { setActiveWallet } = useSetActiveWallet()
+  const payingWith = usePayingWith()
   const [open, setOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
+
+  // Auto-activate the embedded wallet when the user signs in.
+  useEffect(() => {
+    if (!authenticated) return
+    const embedded = wallets.find((w) => w.walletClientType === 'privy')
+    if (embedded) void setActiveWallet(embedded)
+  }, [authenticated, wallets, setActiveWallet])
 
   // Close on outside click
   useEffect(() => {
@@ -120,6 +129,31 @@ function PrivySignInButton({ onWallet }: Props) {
               {email}
             </div>
           )}
+
+          {/* ── Paying with ── */}
+          <div className="px-4 py-2 border-b border-[var(--line)]">
+            <div className="flex items-center gap-1.5 mb-1">
+              <CreditCard className="size-3 text-[var(--muted)]" aria-hidden />
+              <span className="text-xs font-medium text-[var(--ink-2)]">Paying with</span>
+            </div>
+            <p className="text-xs text-[var(--ink)]">
+              {payingWith.label}
+              {payingWith.shortAddress && (
+                <span className="text-[var(--muted)]"> · {payingWith.shortAddress}</span>
+              )}
+            </p>
+            <p className="text-xs text-[var(--muted)] tabular-nums">{payingWith.balanceLabel} USDC</p>
+            {payingWith.hasEmbedded && payingWith.hasExternal && (
+              <button
+                onClick={() => payingWith.isEmbeddedActive ? payingWith.setExternal() : payingWith.setEmbedded()}
+                className="mt-1 inline-flex items-center gap-1 text-xs text-[var(--accent)] hover:underline focus-visible:outline-2 focus-visible:outline-[var(--focus)] rounded"
+              >
+                <RefreshCw className="size-3" aria-hidden />
+                Switch to {payingWith.isEmbeddedActive ? 'connected wallet' : 'Earmark wallet'}
+              </button>
+            )}
+          </div>
+
           <button
             role="menuitem"
             onClick={() => { setOpen(false); onWallet() }}

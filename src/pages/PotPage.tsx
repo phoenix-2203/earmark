@@ -48,6 +48,19 @@ import PayeeBadge from '@/components/PayeeBadge'
 import AskPayeeToConfirmButton from '@/components/AskPayeeToConfirmButton'
 import { parseLabel, encodeLabel, encodedByteLength } from '@/lib/payeeLabel'
 import { normaliseDomain } from '@/lib/verifyPayee'
+import { PRIVY_ENABLED, usePayingWith } from '@/lib/privy'
+
+function PayingWithLine() {
+  const pw = usePayingWith()
+  if (!PRIVY_ENABLED || !pw.address) return null
+  return (
+    <p className="text-xs text-[var(--muted)]">
+      Paying with <span className="font-medium text-[var(--ink-2)]">{pw.label}</span>
+      {pw.shortAddress && <span className="font-mono"> {pw.shortAddress}</span>}
+      {' · '}{pw.balanceLabel} USDC
+    </p>
+  )
+}
 
 interface Props {
   potId: bigint
@@ -612,6 +625,7 @@ function TopUpForm({ potId, onDone }: { potId: bigint; onDone: () => void }) {
       <AmountInput value={amount} onChange={setAmount} balance={usdcBalance} />
       {errMsg && <p role="alert" className="text-xs text-danger">{errMsg}</p>}
       {txHash && <TxStatus state={phase === 'busy' ? 'submitted' : phase === 'done' ? 'confirmed' : 'failed'} txHash={txHash} />}
+      <PayingWithLine />
       <div className="flex gap-2">
         <Button size="sm" loading={phase === 'busy'} loadingLabel="Topping up…" onClick={() => void handleTopUp()} className="flex-1">
           Top up
@@ -1089,6 +1103,7 @@ function PayForm({ potId, payees, balance, onDone }: { potId: bigint; payees: Pa
       {err && <p role="alert" className="text-xs text-danger">{err}</p>}
       {action.txHash && <TxStatus state={action.state} txHash={action.txHash} />}
 
+      <PayingWithLine />
       <div className="flex gap-2">
         <Button size="sm" loading={action.isBusy} loadingLabel="Sending…" onClick={() => void handleSubmit()} className="flex-1" disabled={overBalance || rawAmount === 0n}>
           <Send className="size-3.5" aria-hidden /> {payeeEntry ? `Pay ${parseLabel(payeeEntry.label).name}` : 'Send payment'}

@@ -15,9 +15,13 @@
 
 import { useState, useEffect } from 'react'
 import { defineChain } from 'viem'
-import { usePrivy } from '@privy-io/react-auth'
+import { erc20Abi } from 'viem'
+import { usePrivy, useWallets } from '@privy-io/react-auth'
+import { useSetActiveWallet } from '@privy-io/wagmi'
+import { useAccount, useReadContract } from 'wagmi'
 import type { PrivyClientConfig } from '@privy-io/react-auth'
-import { EARMARK_CHAIN } from '@/earmarkConfig'
+import { EARMARK_CHAIN, USDC_ADDRESS, EARMARK_CHAIN_ID } from '@/earmarkConfig'
+import { formatUsdc } from '@/utils/format'
 
 export const PRIVY_ENABLED = !!import.meta.env.VITE_PRIVY_APP_ID
 
@@ -82,4 +86,62 @@ export function usePrivyReady(): { ready: boolean; timedOut: boolean } {
   }, [ready])
 
   return { ready, timedOut }
+}
+
+/**
+ * usePayingWith — returns info about the currently active wallet for display in forms.
+ *
+ * Only call from components rendered inside PrivyProvider (PRIVY_ENABLED guard in the
+ * outer shell; PrivyProvider wraps the inner component).
+ *
+ * Returns:
+ *  - label          'Earmark wallet' | 'MetaMask' | short address
+ *  - address        checksummed active address or undefined
+ *  - balanceLabel   formatted USDC balance or '—'
+ *  - hasEmbedded    true if the user has a Privy embedded wallet
+ *  - hasExternal    true if there is at least one non-embedded wallet connected
+ *  - setEmbedded    () => void — make the embedded wallet active
+ *  - setExternal    () => void — make the first external wallet active
+ */
+export function usePayingWith() {
+  const { wallets } = useWallets()
+  const { setActiveWallet } = useSetActiveWallet()
+  const { address: activeAddress } = useAccount()
+
+  const embedded = wallets.find((w) => w.walletClientType === 'privy')
+  const external = wallets.find((w) => w.walletClientType !== 'privy')
+
+  const isEmbeddedActive = !!(embedded && activeAddress &&
+    embedded.address.toLowerCase() === activeAddress.toLowerCase())
+
+  const label = isEmbeddedActive
+    ? 'Earmark wallet'
+    : external?.meta.name ?? (activeAddress ? activeAddress.slice(0, 6) + '…' + activeAddress.slice(-4) : 'Wallet')
+
+  const { data: balance } = useReadContract({
+    address: USDC_ADDRESS,
+    abi: erc20Abi,
+    functionName: 'balanceOf',
+    args: activeAddress ? [activeAddress] : undefined,
+    chainId: EARMARK_CHAIN_ID,
+    query: { enabled: !!activeAddress, refetchInterval: 30_000 },
+  })
+
+  const balanceLabel = balance !== undefined ? formatUsdc(balance) : '—'
+
+  const shortAddress = activeAddress
+    ? activeAddress.slice(0, 6) + '…' + activeAddress.slice(-4)
+    : undefined
+
+  return {
+    label,
+    address: activeAddress,
+    shortAddress,
+    balanceLabel,
+    hasEmbedded: !!embedded,
+    hasExternal: !!external,
+    setEmbedded: () => { if (embedded) void setActiveWallet(embedded) },
+    setExternal: () => { if (external) void setActiveWallet(external) },
+    isEmbeddedActive,
+  }
 }
