@@ -14,11 +14,12 @@
 import { useState } from 'react'
 import { useReadContract } from 'wagmi'
 import { erc20Abi, isAddress, getAddress } from 'viem'
-import { writeContract, waitForTransactionReceipt } from '@wagmi/core'
+import { writeContract, waitForTransactionReceipt, switchChain } from '@wagmi/core'
 import { Copy, ExternalLink, Download, QrCode, ArrowLeft, AlertTriangle, Send } from 'lucide-react'
 import QRCode from 'qrcode'
 import { toast } from 'sonner'
-import { usePrivy, useExportWallet } from '@privy-io/react-auth'
+import { usePrivy, useExportWallet, useWallets } from '@privy-io/react-auth'
+import { useSetActiveWallet } from '@privy-io/wagmi'
 import { usePrivyReady } from '@/lib/privy'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
@@ -61,8 +62,11 @@ function PrivyWalletContent({ onBack, onSignIn }: Props) {
   const privy = usePrivy()
   const { ready, timedOut } = usePrivyReady()
   const { exportWallet } = useExportWallet()
-  // useAccount gives us the currently active wagmi wallet (may be MetaMask etc.).
-  // Display always uses the embedded wallet; useAccount is kept for the send flow in B4.
+  const { wallets } = useWallets()
+  const { setActiveWallet } = useSetActiveWallet()
+
+  // Find the Privy embedded wallet in the wagmi wallets list (for setActiveWallet).
+  const embeddedWagmiWallet = wallets.find((w) => w.walletClientType === 'privy')
 
   // The Privy-managed embedded wallet — this is always the user's Earmark wallet.
   const embeddedWallet = privy.user?.linkedAccounts?.find(
@@ -124,6 +128,13 @@ function PrivyWalletContent({ onBack, onSignIn }: Props) {
     setSendTxError(undefined)
 
     try {
+      // Activate the embedded wallet before signing so MetaMask etc. can't intercept.
+      if (embeddedWagmiWallet) {
+        await setActiveWallet(embeddedWagmiWallet)
+        // Switch to Arc chain in case another chain was previously selected.
+        await switchChain(config, { chainId: EARMARK_CHAIN_ID })
+      }
+
       const toAddr = getAddress(sendTo.trim())
       const amt = parseUsdc(sendAmount)
       const hash = await writeContract(config, {
@@ -307,6 +318,13 @@ function PrivyWalletContent({ onBack, onSignIn }: Props) {
             />
           )}
         </Field>
+
+        {walletAddress && (
+          <p className="text-xs text-[var(--muted)]">
+            Sending from your Earmark wallet{' '}
+            <span className="font-mono">{shortAddr(walletAddress)}</span>
+          </p>
+        )}
 
         {sendPhase !== 'idle' && (
           <TxStatus state={sendActionState} txHash={sendTxHash} errorMessage={sendTxError} />
