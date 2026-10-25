@@ -353,7 +353,18 @@ function PrivyWalletContent({ onBack, onSignIn }: Props) {
         )}
 
         {sendPhase !== 'idle' && (
-          <TxStatus state={sendActionState} txHash={sendTxHash} errorMessage={sendTxError} />
+          <>
+            <TxStatus
+              state={sendActionState}
+              txHash={sendTxHash}
+              errorMessage={sendTxError?.split('Details:')[0]?.trim()}
+            />
+            {sendPhase === 'failed' && sendTxError?.includes('Details:') && (
+              <p className="text-xs text-[var(--muted)] -mt-1">
+                Details: {sendTxError.split('Details:')[1]?.trim()}
+              </p>
+            )}
+          </>
         )}
 
         {sendPhase !== 'done' && (
