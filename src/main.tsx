@@ -13,7 +13,8 @@
 import './tracing'
 import './console-capture'
 
-import { StrictMode } from 'react'
+import { StrictMode, Component } from 'react'
+import type { ReactNode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { Toaster } from 'sonner'
@@ -76,6 +77,33 @@ function AppTree() {
   )
 }
 
+// ── PrivyErrorBoundary ────────────────────────────────────────────────────────
+// Catches any error thrown during PrivyProvider initialisation (e.g. invalid
+// app ID, network failure) and renders the ConnectKit fallback tree instead.
+
+interface BoundaryProps {
+  children: ReactNode
+  fallback: ReactNode
+}
+interface BoundaryState { hasError: boolean }
+
+class PrivyErrorBoundary extends Component<BoundaryProps, BoundaryState> {
+  constructor(props: BoundaryProps) {
+    super(props)
+    this.state = { hasError: false }
+  }
+  static getDerivedStateFromError(): BoundaryState {
+    return { hasError: true }
+  }
+  componentDidCatch(err: unknown) {
+    // Log once — never rethrow; fallback tree takes over
+    console.error('[Earmark] PrivyProvider failed to initialise:', err)
+  }
+  render() {
+    return this.state.hasError ? this.props.fallback : this.props.children
+  }
+}
+
 if (PRIVY_ENABLED) {
   // Dynamic import so that the Privy bundle is excluded when not configured.
   // eslint-disable-next-line @typescript-eslint/no-floating-promises
@@ -83,8 +111,9 @@ if (PRIVY_ENABLED) {
     import('@privy-io/react-auth'),
     import('@privy-io/wagmi'),
     import('wagmi'),
-    import('viem'),
-  ]).then(([{ PrivyProvider }, { WagmiProvider, createConfig }, { http }]) => {
+    import('connectkit'),
+    import('./config'),
+  ]).then(([{ PrivyProvider }, { WagmiProvider: PrivyWagmiProvider, createConfig }, { WagmiProvider, http }, { ConnectKitProvider }, { config: ckConfig }]) => {
     const privyWagmiConfig = createConfig({
       chains: [PRIVY_VIEM_CHAIN],
       transports: {
@@ -92,15 +121,29 @@ if (PRIVY_ENABLED) {
       },
     })
 
+    // Fallback ConnectKit tree — rendered by PrivyErrorBoundary when PrivyProvider
+    // throws (e.g. invalid app ID). Uses the standard wagmi WagmiProvider + ckConfig.
+    const connectKitFallback = (
+      <WagmiProvider config={ckConfig}>
+        <QueryClientProvider client={queryClient}>
+          <ConnectKitProvider>
+            <AppTree />
+          </ConnectKitProvider>
+        </QueryClientProvider>
+      </WagmiProvider>
+    )
+
     createRoot(document.getElementById('root')!).render(
       <StrictMode>
-        <PrivyProvider appId={PRIVY_APP_ID} config={privyConfig}>
-          <QueryClientProvider client={queryClient}>
-            <WagmiProvider config={privyWagmiConfig}>
-              <AppTree />
-            </WagmiProvider>
-          </QueryClientProvider>
-        </PrivyProvider>
+        <PrivyErrorBoundary fallback={connectKitFallback}>
+          <PrivyProvider appId={PRIVY_APP_ID} config={privyConfig}>
+            <QueryClientProvider client={queryClient}>
+              <PrivyWagmiProvider config={privyWagmiConfig}>
+                <AppTree />
+              </PrivyWagmiProvider>
+            </QueryClientProvider>
+          </PrivyProvider>
+        </PrivyErrorBoundary>
       </StrictMode>,
     )
   })

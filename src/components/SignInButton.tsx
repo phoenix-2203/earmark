@@ -11,7 +11,7 @@ import { useState, useRef, useEffect } from 'react'
 import { ConnectKitButton } from 'connectkit'
 import { ChevronDown, Wallet, LogOut } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
-import { PRIVY_ENABLED } from '@/lib/privy'
+import { PRIVY_ENABLED, usePrivyReady } from '@/lib/privy'
 import { shortAddr } from '@/utils/format'
 // usePrivy is imported unconditionally; we only call it inside PrivySignInButton
 // which is only rendered when PRIVY_ENABLED is true.
@@ -33,7 +33,8 @@ export default function SignInButton({ onWallet }: Props) {
 /** Inner component — only rendered when PRIVY_ENABLED, so usePrivy is
  *  always called unconditionally here (no rules-of-hooks violation). */
 function PrivySignInButton({ onWallet }: Props) {
-  const { ready, authenticated, login, logout, user } = usePrivy()
+  const { ready, timedOut } = usePrivyReady()
+  const { authenticated, login, logout, user } = usePrivy()
   const [open, setOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
 
@@ -56,6 +57,24 @@ function PrivySignInButton({ onWallet }: Props) {
   }, [open])
 
   if (!ready) {
+    if (timedOut) {
+      return (
+        <span className="text-xs text-[var(--warning)]">
+          Couldn't reach the sign-in service. Refresh the page, or{' '}
+          <ConnectKitButton.Custom>
+            {({ show }) => (
+              <button
+                onClick={show}
+                className="underline text-[var(--accent)] hover:no-underline focus-visible:outline-2 focus-visible:outline-[var(--focus)] rounded"
+              >
+                connect a wallet instead
+              </button>
+            )}
+          </ConnectKitButton.Custom>
+          .
+        </span>
+      )
+    }
     return (
       <div className="h-9 w-20 animate-pulse rounded-input bg-[var(--surface-2)]" aria-label="Loading…" />
     )

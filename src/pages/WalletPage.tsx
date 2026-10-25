@@ -19,6 +19,7 @@ import { Copy, ExternalLink, Download, QrCode, ArrowLeft, AlertTriangle, Send } 
 import QRCode from 'qrcode'
 import { toast } from 'sonner'
 import { usePrivy, useExportWallet } from '@privy-io/react-auth'
+import { usePrivyReady } from '@/lib/privy'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
 import { Field } from '@/components/ui/Field'
@@ -58,6 +59,7 @@ export default function WalletPage({ onBack, onSignIn }: Props) {
 /** Inner component — only rendered when PRIVY_ENABLED. usePrivy is called unconditionally. */
 function PrivyWalletContent({ onBack, onSignIn }: Props) {
   const privy = usePrivy()
+  const { ready, timedOut } = usePrivyReady()
   const { exportWallet } = useExportWallet()
   const { address: connectedAddress } = useAccount()
 
@@ -160,7 +162,20 @@ function PrivyWalletContent({ onBack, onSignIn }: Props) {
   }
 
   // ── Not ready ──
-  if (!privy.ready) {
+  if (!ready) {
+    if (timedOut) {
+      return (
+        <PageShell onBack={onBack}>
+          <Card padding="lg" className="text-center space-y-4">
+            <h1 className="text-xl font-semibold text-[var(--ink)]">My Earmark wallet</h1>
+            <p className="text-sm text-[var(--ink-2)]">
+              Couldn't reach the sign-in service. Refresh the page, or connect a wallet instead.
+            </p>
+            <Button size="md" variant="secondary" className="w-full" onClick={onBack}>Go home</Button>
+          </Card>
+        </PageShell>
+      )
+    }
     return (
       <PageShell onBack={onBack}>
         <div className="flex justify-center py-12 text-[var(--muted)] text-sm">Loading…</div>

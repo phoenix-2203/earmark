@@ -10,9 +10,12 @@
  *  - PRIVY_APP_ID         — the app id string
  *  - PRIVY_VIEM_CHAIN     — a viem-compatible chain definition for PrivyProvider
  *  - privyConfig          — PrivyClientConfig to pass to <PrivyProvider>
+ *  - usePrivyReady        — hook: returns { ready, timedOut } (10 s timeout)
  */
 
+import { useState, useEffect } from 'react'
 import { defineChain } from 'viem'
+import { usePrivy } from '@privy-io/react-auth'
 import type { PrivyClientConfig } from '@privy-io/react-auth'
 import { EARMARK_CHAIN } from '@/earmarkConfig'
 
@@ -55,4 +58,28 @@ export const privyConfig: PrivyClientConfig = {
     accentColor: '#0F6B5C',
     // no logo — keeps Privy modal clean
   },
+}
+
+/**
+ * usePrivyReady — wraps usePrivy and adds a 10 s timeout.
+ *
+ * Returns:
+ *  - ready     true when Privy finished initialising
+ *  - timedOut  true when 10 s passed and Privy still isn't ready
+ *
+ * Only call from components rendered inside PrivyProvider.
+ * Components should check timedOut before ready and offer the wallet-connect
+ * fallback: "Couldn't reach the sign-in service. Refresh the page, or connect a wallet instead."
+ */
+export function usePrivyReady(): { ready: boolean; timedOut: boolean } {
+  const { ready } = usePrivy()
+  const [timedOut, setTimedOut] = useState(false)
+
+  useEffect(() => {
+    if (ready) return
+    const id = setTimeout(() => setTimedOut(true), 10_000)
+    return () => clearTimeout(id)
+  }, [ready])
+
+  return { ready, timedOut }
 }
