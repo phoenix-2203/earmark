@@ -13,13 +13,11 @@
 
 import { useState } from 'react'
 import { useReadContract } from 'wagmi'
-import { erc20Abi, isAddress, getAddress } from 'viem'
-import { writeContract, waitForTransactionReceipt, switchChain } from '@wagmi/core'
+import { erc20Abi, isAddress, getAddress, encodeFunctionData } from 'viem'
 import { Copy, ExternalLink, Download, QrCode, ArrowLeft, AlertTriangle, Send } from 'lucide-react'
 import QRCode from 'qrcode'
 import { toast } from 'sonner'
-import { usePrivy, useExportWallet, useWallets } from '@privy-io/react-auth'
-import { useSetActiveWallet } from '@privy-io/wagmi'
+import { usePrivy, useExportWallet, useSendTransaction } from '@privy-io/react-auth'
 import { usePrivyReady } from '@/lib/privy'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
@@ -27,14 +25,39 @@ import { Field } from '@/components/ui/Field'
 import { AmountInput } from '@/components/ui/AmountInput'
 import { TxStatus } from '@/components/ui/TxStatus'
 import { formatUsdc, parseUsdc, shortAddr, isValidUsdcAmount } from '@/utils/format'
-import { USDC_ADDRESS, EARMARK_CHAIN_ID, EARMARK_CHAIN } from '@/earmarkConfig'
+import { USDC_ADDRESS, EARMARK_CHAIN_ID, EARMARK_CHAIN, publicClient } from '@/earmarkConfig'
 import { PRIVY_ENABLED } from '@/lib/privy'
-import { config } from '@/config'
 import type { ActionState } from '@/hooks/useContractAction'
 
 // ── Minimum gas reserve (in USDC 6-dec) ──────────────────────────────────────
 // Arc fees are tiny but non-zero. Reserve 0.02 USDC so the user can always pay gas.
 const GAS_RESERVE = parseUsdc('0.02')
+
+// ── Send-error classifier ─────────────────────────────────────────────────────
+function classifySendError(err: unknown): string {
+  const raw = err instanceof Error ? err : new Error(String(err))
+  const msg = raw.message.toLowerCase()
+  // User closed the Privy modal or rejected in wallet
+  if (
+    msg.includes('rejected') ||
+    msg.includes('cancel') ||
+    msg.includes('4001') ||
+    msg.includes('user closed') ||
+    msg.includes('user denied')
+  ) return 'You cancelled.'
+  // On-chain revert from the receipt check
+  if (msg === 'reverted') return 'The network rejected the transfer.'
+  // Insufficient balance / allowance
+  if (msg.includes('insufficient') || msg.includes('exceeds balance') || msg.includes('transfer amount'))
+    return 'Not enough USDC to cover the amount plus the network fee.'
+  // Return friendly + detail line
+  const detail = (
+    'shortMessage' in raw && typeof (raw as Record<string, unknown>).shortMessage === 'string'
+      ? (raw as Record<string, unknown>).shortMessage as string
+      : raw.message
+  ).slice(0, 160)
+  return `Transaction failed. Details: ${detail}`
+}
 
 interface Props {
   onBack: () => void
@@ -62,11 +85,7 @@ function PrivyWalletContent({ onBack, onSignIn }: Props) {
   const privy = usePrivy()
   const { ready, timedOut } = usePrivyReady()
   const { exportWallet } = useExportWallet()
-  const { wallets } = useWallets()
-  const { setActiveWallet } = useSetActiveWallet()
-
-  // Find the Privy embedded wallet in the wagmi wallets list (for setActiveWallet).
-  const embeddedWagmiWallet = wallets.find((w) => w.walletClientType === 'privy')
+  const { sendTransaction } = useSendTransaction()
 
   // The Privy-managed embedded wallet — this is always the user's Earmark wallet.
   const embeddedWallet = privy.user?.linkedAccounts?.find(
@@ -128,25 +147,32 @@ function PrivyWalletContent({ onBack, onSignIn }: Props) {
     setSendTxError(undefined)
 
     try {
-      // Activate the embedded wallet before signing so MetaMask etc. can't intercept.
-      if (embeddedWagmiWallet) {
-        await setActiveWallet(embeddedWagmiWallet)
-        // Switch to Arc chain in case another chain was previously selected.
-        await switchChain(config, { chainId: EARMARK_CHAIN_ID })
-      }
-
       const toAddr = getAddress(sendTo.trim())
       const amt = parseUsdc(sendAmount)
-      const hash = await writeContract(config, {
-        address: USDC_ADDRESS,
+
+      // Encode the ERC-20 transfer call, then send via Privy so it always
+      // uses the embedded wallet — never an injected extension.
+      const data = encodeFunctionData({
         abi: erc20Abi,
         functionName: 'transfer',
         args: [toAddr, amt],
-        chainId: EARMARK_CHAIN_ID,
       })
+      const { hash } = await sendTransaction(
+        { to: USDC_ADDRESS, data, chainId: EARMARK_CHAIN_ID },
+        {
+          address: embeddedWallet?.address,
+          uiOptions: { description: `Send ${sendAmount} USDC to ${shortAddr(toAddr)}` },
+        },
+      )
+
       setSendTxHash(hash)
       setSendPhase('waiting')
-      await waitForTransactionReceipt(config, { hash, chainId: EARMARK_CHAIN_ID })
+
+      const receipt = await publicClient.waitForTransactionReceipt({ hash })
+      if (receipt.status !== 'success') {
+        throw new Error('reverted')
+      }
+
       setSendPhase('done')
       toast.success('USDC sent!')
       void refetchBalance()
@@ -154,8 +180,8 @@ function PrivyWalletContent({ onBack, onSignIn }: Props) {
       setSendTo('')
     } catch (err) {
       setSendPhase('failed')
-      const msg = err instanceof Error ? err.message : String(err)
-      setSendTxError(msg.includes('rejected') || msg.includes('4001') ? 'You cancelled in your wallet.' : 'Transaction failed. Try again.')
+      setSendTxError(classifySendError(err))
+      console.error('[WalletPage] sendTransaction failed:', err)
     }
   }
 
