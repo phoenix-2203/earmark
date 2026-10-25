@@ -3,6 +3,7 @@ import { useAccount } from 'wagmi'
 import NetworkGuard from '@/components/NetworkGuard'
 import UsdcBalance from '@/components/UsdcBalance'
 import SignInButton from '@/components/SignInButton'
+import ThemeToggle from '@/components/ui/ThemeToggle'
 import HomePage from '@/pages/HomePage'
 import AboutPage from '@/pages/AboutPage'
 import CreatePotPage from '@/pages/CreatePotPage'
@@ -16,6 +17,7 @@ import ConfirmPayeePage from '@/pages/ConfirmPayeePage'
 import PayeeConfirmedPage from '@/pages/PayeeConfirmedPage'
 import { EARMARK_CHAIN, EARMARK_ADDRESS } from '@/earmarkConfig'
 import { PRIVY_ENABLED } from '@/lib/privy'
+import { useEffectiveTheme } from '@/lib/theme'
 import { Send, Inbox, PiggyBank } from 'lucide-react'
 
 // ── Routes ──────────────────────────────────────────────────────────────────
@@ -81,6 +83,7 @@ const STANDALONE_PAGES: Page[] = ['confirm-payee', 'payee-confirmed']
 export default function App() {
   const [route, setRoute] = useState<Route>(parseRoute)
   const { isConnected } = useAccount()
+  const effectiveTheme = useEffectiveTheme()
 
   function navigate(page: Page, potId?: bigint, paymentIndex?: number) {
     const r: Route = { page, potId, paymentIndex }
@@ -113,7 +116,7 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-dvh" style={{ background: isSitePage ? '#fff' : 'var(--bg)' }}>
+    <div className="min-h-dvh" style={{ background: 'var(--bg)' }}>
 
       {/* ── App shell header (full nav) — app pages only ── */}
       {showShell && (
@@ -124,7 +127,11 @@ export default function App() {
               className="flex items-center focus-visible:outline-2 focus-visible:outline-[var(--focus)] rounded"
               aria-label="Earmark — go to home"
             >
-              <img src="/earmark-logo.svg" alt="Earmark" className="h-6 w-auto" />
+              <img
+                src={effectiveTheme === 'dark' ? '/earmark-logo-dark.svg' : '/earmark-logo.svg'}
+                alt="Earmark"
+                className="h-6 w-auto"
+              />
             </button>
             <nav className="hidden gap-1 md:flex" aria-label="Main navigation">
               {NAV.map(({ page, label, Icon }) => (
@@ -144,6 +151,7 @@ export default function App() {
               ))}
             </nav>
             <div className="flex items-center gap-3">
+              <ThemeToggle />
               {isConnected && !PRIVY_ENABLED && <UsdcBalance />}
               <SignInButton onWallet={() => navigate('wallet')} />
             </div>
@@ -163,7 +171,11 @@ export default function App() {
               className="flex items-center focus-visible:outline-2 focus-visible:outline-[var(--focus)] rounded"
               aria-label="Earmark — go to home"
             >
-              <img src="/earmark-logo.svg" alt="Earmark" className="h-6 w-auto" />
+              <img
+                src={effectiveTheme === 'dark' ? '/earmark-logo-dark.svg' : '/earmark-logo.svg'}
+                alt="Earmark"
+                className="h-6 w-auto"
+              />
             </button>
             <div className="flex items-center gap-3">
               <button
@@ -172,6 +184,7 @@ export default function App() {
               >
                 How it works
               </button>
+              <ThemeToggle />
               {isConnected && !PRIVY_ENABLED && <UsdcBalance />}
               <SignInButton onWallet={() => navigate('wallet')} />
             </div>
@@ -181,7 +194,7 @@ export default function App() {
 
       {/* Contract not deployed notice */}
       {noContract && showShell && (
-        <div className="mx-4 mt-4 rounded-card border border-[#F5C6C3] bg-[#FDECEC] p-4 text-sm text-danger">
+        <div className="mx-4 mt-4 rounded-card border border-[var(--danger-line)] bg-[var(--danger-soft)] p-4 text-sm text-[var(--danger)]">
           The Earmark contract is not yet deployed. Set <code className="font-mono">VITE_EARMARK_ADDRESS</code> in <code className="font-mono">.env</code> after deploying.
         </div>
       )}

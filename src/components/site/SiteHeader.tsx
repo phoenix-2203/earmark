@@ -6,7 +6,9 @@ import { useState, useRef, useEffect } from 'react'
 import { Github, Menu, X, ExternalLink } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import SignInButton from '@/components/SignInButton'
+import ThemeToggle from '@/components/ui/ThemeToggle'
 import { PRIVY_ENABLED } from '@/lib/privy'
+import { useEffectiveTheme } from '@/lib/theme'
 
 interface Props {
   onOpenApp: () => void
@@ -33,6 +35,7 @@ function scrollTo(id: string) {
 export default function SiteHeader({ onOpenApp, onHow, onAbout, onWallet = onOpenApp }: Props) {
   const [open, setOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
+  const effectiveTheme = useEffectiveTheme()
 
   // Close on outside click
   useEffect(() => {
@@ -59,7 +62,7 @@ export default function SiteHeader({ onOpenApp, onHow, onAbout, onWallet = onOpe
   }
 
   return (
-    <header className="sticky top-0 z-50 border-b border-[var(--line)] bg-white/95 backdrop-blur-sm">
+    <header className="sticky top-0 z-50 border-b border-[var(--line)] bg-[var(--surface)]/95 backdrop-blur-sm">
       <div className="mx-auto flex max-w-[1040px] items-center justify-between px-4 py-3 gap-4">
 
         {/* ── Logo ── */}
@@ -69,7 +72,7 @@ export default function SiteHeader({ onOpenApp, onHow, onAbout, onWallet = onOpe
           aria-label="Earmark — go to home"
         >
           <img
-            src="/earmark-logo.svg"
+            src={effectiveTheme === 'dark' ? '/earmark-logo-dark.svg' : '/earmark-logo.svg'}
             alt="Earmark"
             className="h-6 sm:h-[26px] w-auto"
           />
@@ -102,6 +105,7 @@ export default function SiteHeader({ onOpenApp, onHow, onAbout, onWallet = onOpe
 
         {/* ── Right side ── */}
         <div className="flex items-center gap-2">
+          <ThemeToggle className="hidden sm:flex" />
           <a
             href="https://github.com/phoenix-2203/earmark"
             target="_blank"
@@ -179,6 +183,11 @@ export default function SiteHeader({ onOpenApp, onHow, onAbout, onWallet = onOpe
                   <Github className="size-4" aria-hidden />
                   GitHub
                 </a>
+                <div className="my-1 border-t border-[var(--line)]" />
+                <div className="flex items-center justify-between px-4 py-2">
+                  <span className="text-sm text-[var(--ink-2)]">Theme</span>
+                  <ThemeToggle />
+                </div>
               </div>
             )}
           </div>

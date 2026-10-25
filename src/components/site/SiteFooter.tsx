@@ -3,6 +3,7 @@
  */
 import { Github } from 'lucide-react'
 import { EARMARK_CHAIN, EARMARK_ADDRESS } from '@/earmarkConfig'
+import { useEffectiveTheme } from '@/lib/theme'
 
 interface Props {
   onSend: () => void
@@ -13,6 +14,7 @@ interface Props {
 }
 
 export default function SiteFooter({ onSend, onSent, onReceived, onHow, onAbout }: Props) {
+  const effectiveTheme = useEffectiveTheme()
   const explorerUrl = `${EARMARK_CHAIN.explorerBase}/address/${EARMARK_ADDRESS}`
   const shortAddr = EARMARK_ADDRESS.length > 2
     ? `${EARMARK_ADDRESS.slice(0, 6)}…${EARMARK_ADDRESS.slice(-4)}`
@@ -97,7 +99,11 @@ export default function SiteFooter({ onSend, onSent, onReceived, onHow, onAbout 
       {/* Bottom bar */}
       <div className="border-t border-[var(--line)] px-4 py-4">
         <div className="mx-auto max-w-[1040px] flex flex-col sm:flex-row items-center justify-between gap-2">
-          <img src="/earmark-logo.svg" alt="Earmark" className="h-5 w-auto opacity-60" />
+          <img
+            src={effectiveTheme === 'dark' ? '/earmark-logo-dark.svg' : '/earmark-logo.svg'}
+            alt="Earmark"
+            className="h-5 w-auto opacity-60"
+          />
           <p className="text-center text-xs text-[var(--muted)]">
             {EARMARK_CHAIN.name} · Experimental — not independently audited. Use small amounts.
           </p>
