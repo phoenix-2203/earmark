@@ -62,14 +62,17 @@ export default function SiteHeader({ onOpenApp, onHow, onAbout, onWallet = onOpe
     <header className="sticky top-0 z-50 border-b border-[var(--line)] bg-white/95 backdrop-blur-sm">
       <div className="mx-auto flex max-w-[1040px] items-center justify-between px-4 py-3 gap-4">
 
-        {/* ── Logo + wordmark ── */}
+        {/* ── Logo ── */}
         <button
           onClick={onOpenApp}
-          className="flex items-center gap-2 rounded focus-visible:outline-2 focus-visible:outline-[var(--focus)]"
+          className="flex items-center rounded focus-visible:outline-2 focus-visible:outline-[var(--focus)]"
           aria-label="Earmark — go to home"
         >
-          <EarmarkMark className="size-7 shrink-0" />
-          <span className="font-display text-base font-semibold text-[var(--ink)]">Earmark</span>
+          <img
+            src="/earmark-logo.svg"
+            alt="Earmark"
+            className="h-6 sm:h-[26px] w-auto"
+          />
         </button>
 
         {/* ── Desktop centre nav ── */}
@@ -185,27 +188,4 @@ export default function SiteHeader({ onOpenApp, onHow, onAbout, onWallet = onOpe
   )
 }
 
-/** Simple rounded-jar SVG mark with a tag */
-function EarmarkMark({ className }: { className?: string }) {
-  return (
-    <svg
-      viewBox="0 0 28 28"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      className={className}
-      aria-hidden
-    >
-      {/* Jar body */}
-      <rect x="5" y="10" width="18" height="14" rx="5" fill="var(--accent-soft)" stroke="var(--accent)" strokeWidth="1.5"/>
-      {/* Jar neck */}
-      <rect x="8" y="7" width="12" height="4" rx="2" fill="var(--accent-soft)" stroke="var(--accent)" strokeWidth="1.5"/>
-      {/* Tag */}
-      <rect x="15" y="2" width="9" height="6" rx="1.5" fill="var(--accent)" />
-      <circle cx="16.5" cy="5" r="1" fill="white"/>
-      {/* Tag string */}
-      <path d="M15 5 Q13 5 13 7" stroke="var(--accent)" strokeWidth="1.2" fill="none" strokeLinecap="round"/>
-      {/* Coin slit */}
-      <rect x="11" y="13.5" width="6" height="1.5" rx="0.75" fill="var(--accent)" opacity="0.5"/>
-    </svg>
-  )
-}
+

@@ -121,9 +121,10 @@ export default function App() {
           <div className="mx-auto flex max-w-page items-center justify-between px-4 py-3">
             <button
               onClick={() => navigate('home')}
-              className="font-display text-base font-semibold text-[var(--ink)] focus-visible:outline-2 focus-visible:outline-[var(--focus)] rounded"
+              className="flex items-center focus-visible:outline-2 focus-visible:outline-[var(--focus)] rounded"
+              aria-label="Earmark — go to home"
             >
-              Earmark
+              <img src="/earmark-logo.svg" alt="Earmark" className="h-6 w-auto" />
             </button>
             <nav className="hidden gap-1 md:flex" aria-label="Main navigation">
               {NAV.map(({ page, label, Icon }) => (
@@ -159,9 +160,10 @@ export default function App() {
           <div className="mx-auto flex max-w-page items-center justify-between px-4 py-3">
             <button
               onClick={() => navigate('home')}
-              className="font-display text-base font-semibold text-[var(--ink)] focus-visible:outline-2 focus-visible:outline-[var(--focus)] rounded"
+              className="flex items-center focus-visible:outline-2 focus-visible:outline-[var(--focus)] rounded"
+              aria-label="Earmark — go to home"
             >
-              Earmark
+              <img src="/earmark-logo.svg" alt="Earmark" className="h-6 w-auto" />
             </button>
             <div className="flex items-center gap-3">
               <button

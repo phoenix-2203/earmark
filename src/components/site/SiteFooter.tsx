@@ -96,9 +96,12 @@ export default function SiteFooter({ onSend, onSent, onReceived, onHow, onAbout 
 
       {/* Bottom bar */}
       <div className="border-t border-[var(--line)] px-4 py-4">
-        <p className="mx-auto max-w-[1040px] text-center text-xs text-[var(--muted)]">
-          {EARMARK_CHAIN.name} · Experimental — not independently audited. Use small amounts.
-        </p>
+        <div className="mx-auto max-w-[1040px] flex flex-col sm:flex-row items-center justify-between gap-2">
+          <img src="/earmark-logo.svg" alt="Earmark" className="h-5 w-auto opacity-60" />
+          <p className="text-center text-xs text-[var(--muted)]">
+            {EARMARK_CHAIN.name} · Experimental — not independently audited. Use small amounts.
+          </p>
+        </div>
       </div>
     </footer>
   )
