@@ -25,6 +25,10 @@
   --focus:       #2E7D6F;
   --on-accent:   #FFFFFF;
 
+  /* CTA band */
+  --band:           #0F6B5C;
+  --on-band:        #FFFFFF;
+
   /* Semantic */
   --success:        #157A55;
   --warning:        #9A5B07;
@@ -66,6 +70,10 @@
     --focus:       #6FD3BA;
     --on-accent:   #062B23;
 
+    /* CTA band */
+    --band:           #0E4F44;
+    --on-band:        #FFFFFF;
+
     --success:        #4CC38A;
     --warning:        #E0A23B;
     --danger:         #F27A6E;
@@ -103,6 +111,10 @@
   --accent-soft: #12332D;
   --focus:       #6FD3BA;
   --on-accent:   #062B23;
+
+  /* CTA band */
+  --band:           #0E4F44;
+  --on-band:        #FFFFFF;
 
   --success:        #4CC38A;
   --warning:        #E0A23B;
