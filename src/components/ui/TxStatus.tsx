@@ -7,6 +7,8 @@ interface TxStatusProps {
   state: ActionState
   txHash?: `0x${string}`
   errorMessage?: string
+  /** Short technical detail shown under the friendly error message (≤160 chars). */
+  errorDetail?: string
   className?: string
 }
 
@@ -18,7 +20,7 @@ const STATE_LABELS: Partial<Record<ActionState, string>> = {
   failed:            'Failed',
 }
 
-export function TxStatus({ state, txHash, errorMessage, className = '' }: TxStatusProps) {
+export function TxStatus({ state, txHash, errorMessage, errorDetail, className = '' }: TxStatusProps) {
   if (state === 'idle') return null
 
   const label = STATE_LABELS[state] ?? state
@@ -46,6 +48,10 @@ export function TxStatus({ state, txHash, errorMessage, className = '' }: TxStat
         >
           {state === 'failed' && errorMessage ? errorMessage : label}
         </span>
+
+        {state === 'failed' && errorDetail && (
+          <p className="mt-0.5 text-xs text-[var(--muted)]">Details: {errorDetail}</p>
+        )}
 
         {explorerUrl && (
           <a

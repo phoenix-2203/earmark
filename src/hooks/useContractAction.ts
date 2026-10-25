@@ -41,6 +41,8 @@ export interface ActionResult {
   state: ActionState
   txHash: `0x${string}` | undefined
   errorMessage: string | undefined
+  /** Short technical detail (≤160 chars) to show under the friendly error message. */
+  errorDetail: string | undefined
   execute: (params: ExecuteParams) => Promise<void>
   reset: () => void
   isBusy: boolean
@@ -87,6 +89,7 @@ export function useContractAction(): ActionResult {
   const [state, setState] = useState<ActionState>('idle')
   const [txHash, setTxHash] = useState<`0x${string}` | undefined>()
   const [errorMessage, setErrorMessage] = useState<string | undefined>()
+  const [errorDetail, setErrorDetail] = useState<string | undefined>()
   const { isConnected } = useAccount()
   const { send } = useTxSender()
   const runIdRef = useRef(0)
@@ -96,6 +99,7 @@ export function useContractAction(): ActionResult {
     setState('idle')
     setTxHash(undefined)
     setErrorMessage(undefined)
+    setErrorDetail(undefined)
   }, [])
 
   const execute = useCallback(async ({ contractCall, description, onSuccess }: ExecuteParams) => {
@@ -105,6 +109,7 @@ export function useContractAction(): ActionResult {
     setState('checking')
     setTxHash(undefined)
     setErrorMessage(undefined)
+    setErrorDetail(undefined)
 
     try {
       if (!isConnected) {
@@ -143,11 +148,14 @@ export function useContractAction(): ActionResult {
       }
     } catch (err) {
       if (!guard()) return
+      console.error(`[useContractAction] ${contractCall.functionName}:`, err)
       setState('failed')
       if (err instanceof TxError) {
         setErrorMessage(err.friendlyMessage)
+        setErrorDetail(err.detail)
       } else {
         setErrorMessage(decodeTxError(err))
+        setErrorDetail(err instanceof Error ? err.message.slice(0, 160) : undefined)
       }
     }
   }, [isConnected, send])
@@ -156,6 +164,7 @@ export function useContractAction(): ActionResult {
     state,
     txHash,
     errorMessage,
+    errorDetail,
     execute,
     reset,
     isBusy: state === 'checking' || state === 'awaitingSignature' || state === 'submitted',

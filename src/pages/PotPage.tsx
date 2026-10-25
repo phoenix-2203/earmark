@@ -605,6 +605,7 @@ function TopUpForm({ potId, onDone }: { potId: bigint; onDone: () => void }) {
       toast.success('Pot topped up!')
       onDone()
     } catch (err) {
+      console.error('[TopUpForm] topUp:', err)
       setPhase('failed')
       if (err instanceof TxError) {
         setErrMsg(err.friendlyMessage)
@@ -730,7 +731,7 @@ function AddPayeeForm({ potId, pot, payees, onDone }: { potId: bigint; pot: Pot;
         />
       )}
       {err && <p role="alert" className="text-xs text-danger">{err}</p>}
-      {action.txHash && <TxStatus state={action.state} txHash={action.txHash} />}
+      {action.txHash && <TxStatus state={action.state} txHash={action.txHash} errorDetail={action.errorDetail} />}
       <div className="flex gap-2">
         <Button size="sm" loading={action.isBusy} loadingLabel="Adding…" onClick={() => void handleAdd()} className="flex-1">
           Add payee
@@ -785,7 +786,7 @@ function RemovePayeeRow({ potId, payee, onRemoved }: { potId: bigint; payee: Pay
           {action.errorMessage && (
             <p role="alert" className="text-xs text-danger">{action.errorMessage}</p>
           )}
-          {action.txHash && <TxStatus state={action.state} txHash={action.txHash} />}
+          {action.txHash && <TxStatus state={action.state} txHash={action.txHash} errorDetail={action.errorDetail} />}
           <div className="flex gap-2">
             <Button
               variant="danger"
@@ -946,7 +947,7 @@ function ExtendForm({ potId, currentExpiry, onDone }: { potId: bigint; currentEx
           />
         )}
       </Field>
-      {action.txHash && <TxStatus state={action.state} txHash={action.txHash} />}
+      {action.txHash && <TxStatus state={action.state} txHash={action.txHash} errorDetail={action.errorDetail} />}
       <div className="flex gap-2">
         <Button size="sm" loading={action.isBusy} loadingLabel="Extending…" onClick={() => void handleExtend()} className="flex-1">
           <CalendarClock className="size-3.5" aria-hidden /> Extend
@@ -966,7 +967,7 @@ function ReleaseAction({ potId, onDone }: { potId: bigint; onDone: () => void })
   return (
     <div className="space-y-3">
       {action.errorMessage && <p role="alert" className="text-xs text-danger">{action.errorMessage}</p>}
-      {action.txHash && <TxStatus state={action.state} txHash={action.txHash} />}
+      {action.txHash && <TxStatus state={action.state} txHash={action.txHash} errorDetail={action.errorDetail} />}
       <Button
         size="sm"
         className="w-full bg-[var(--success)] hover:opacity-90"
@@ -992,7 +993,7 @@ function ReclaimAction({ potId, onDone }: { potId: bigint; onDone: () => void })
   return (
     <div className="space-y-3">
       {action.errorMessage && <p role="alert" className="text-xs text-danger">{action.errorMessage}</p>}
-      {action.txHash && <TxStatus state={action.state} txHash={action.txHash} />}
+      {action.txHash && <TxStatus state={action.state} txHash={action.txHash} errorDetail={action.errorDetail} />}
       <Button
         variant="danger"
         size="sm"
@@ -1096,7 +1097,7 @@ function PayForm({ potId, payees, balance, onDone }: { potId: bigint; payees: Pa
       </div>
 
       {err && <p role="alert" className="text-xs text-danger">{err}</p>}
-      {action.txHash && <TxStatus state={action.state} txHash={action.txHash} />}
+      {action.txHash && <TxStatus state={action.state} txHash={action.txHash} errorDetail={action.errorDetail} />}
 
       <PayingWithLine />
       <div className="flex gap-2">
@@ -1250,7 +1251,7 @@ function RequestPayeeForm({ potId, pot, payees, onDone }: { potId: bigint; pot: 
         />
       </div>
       {err && <p role="alert" className="text-xs text-danger">{err}</p>}
-      {action.txHash && <TxStatus state={action.state} txHash={action.txHash} />}
+      {action.txHash && <TxStatus state={action.state} txHash={action.txHash} errorDetail={action.errorDetail} />}
       <div className="flex gap-2">
         <Button size="sm" loading={action.isBusy} loadingLabel="Sending…" onClick={() => void handleRequest()} className="flex-1">
           Send request

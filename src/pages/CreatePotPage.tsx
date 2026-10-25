@@ -116,6 +116,7 @@ export default function CreatePotPage({ onBack, onSuccess }: Props) {
   const [txPhase, setTxPhase] = useState<TxPhase>('idle')
   const [txHash, setTxHash] = useState<`0x${string}` | undefined>()
   const [txError, setTxError] = useState<string | undefined>()
+  const [txErrorDetail, setTxErrorDetail] = useState<string | undefined>()
   const [createdPotId, setCreatedPotId] = useState<bigint | undefined>()
 
   // Recipient balance (to decide whether to offer fee top-up)
@@ -220,6 +221,7 @@ export default function CreatePotPage({ onBack, onSuccess }: Props) {
     setTxPhase('checkingAllowance')
     setTxHash(undefined)
     setTxError(undefined)
+    setTxErrorDetail(undefined)
 
     try {
       const rawAmt = parseUsdc(amount)
@@ -314,11 +316,14 @@ export default function CreatePotPage({ onBack, onSuccess }: Props) {
         }
       }
     } catch (err) {
+      console.error('[CreatePotPage] createPot:', err)
       setTxPhase('failed')
       if (err instanceof TxError) {
         setTxError(err.friendlyMessage)
+        setTxErrorDetail(err.detail)
       } else {
         setTxError(extractErr(err))
+        setTxErrorDetail(err instanceof Error ? err.message.slice(0, 160) : undefined)
       }
     }
   }, [address, beneficiary, wrongChain, amount, expiryDate, completedPayees, title, category, sendFeeToRecipient, showFeeOffer, FEE_TOP_UP_AMOUNT, send])
@@ -389,7 +394,7 @@ export default function CreatePotPage({ onBack, onSuccess }: Props) {
         <Card padding="lg" className="space-y-5">
           <h2 className="text-base font-semibold text-[var(--ink)]">Creating your pot</h2>
           <Stepper steps={stepperSteps} />
-          <TxStatus state={actionState} txHash={txHash} errorMessage={txError} />
+          <TxStatus state={actionState} txHash={txHash} errorMessage={txError} errorDetail={txErrorDetail} />
           {txPhase === 'failed' && (
             <div className="flex gap-3">
               <Button variant="secondary" onClick={() => { setStep('review'); setTxPhase('idle') }}>
