@@ -89,6 +89,41 @@ export function usePrivyReady(): { ready: boolean; timedOut: boolean } {
 }
 
 /**
+ * useEmbeddedAddress — returns the Privy embedded wallet address (walletClientType === 'privy'),
+ * or undefined when PRIVY_ENABLED is false or the user has no embedded wallet.
+ *
+ * Safe to call from any component: when PRIVY_ENABLED is false the inner hook call is
+ * skipped (outer shell returns undefined before the inner component renders).
+ * When PRIVY_ENABLED is true the component is always inside PrivyProvider so useWallets is safe.
+ */
+function EmbeddedAddressInner({ onResult }: { onResult: (addr: `0x${string}` | undefined) => void }) {
+  const { wallets } = useWallets()
+  const embedded = wallets.find((w) => w.walletClientType === 'privy')
+  onResult(embedded?.address as `0x${string}` | undefined)
+  return null
+}
+// We can't call hooks conditionally, so we use useState+useEffect pattern for the outer shell.
+// But hooks can't return from render children — use a module-level ref pattern instead.
+// Simpler: export a hook that calls useWallets() unconditionally, but guard it with a module
+// that returns a safe value outside PrivyProvider. Since all callers of useTxSender are
+// rendered inside PrivyProvider when PRIVY_ENABLED, we just always call useWallets() and
+// guard with PRIVY_ENABLED for the logic.
+export function useEmbeddedAddress(): `0x${string}` | undefined {
+  // useWallets() is only safe inside PrivyProvider. When PRIVY_ENABLED is false the component
+  // tree never includes PrivyProvider, so this hook must not be called at all.
+  // Callers of useTxSender are gated by the component tree, so this is safe.
+  if (!PRIVY_ENABLED) return undefined
+  // eslint-disable-next-line react-hooks/rules-of-hooks
+  const { wallets } = useWallets()
+  const embedded = wallets.find((w) => w.walletClientType === 'privy')
+  return embedded?.address as `0x${string}` | undefined
+}
+// Suppress the rules-of-hooks lint for the conditional above — the branch is permanent
+// (PRIVY_ENABLED is a module-level const set at build time), so the hook call count is
+// always the same at runtime.
+void EmbeddedAddressInner
+
+/**
  * usePayingWith — returns info about the currently active wallet for display in forms.
  *
  * Only call from components rendered inside PrivyProvider (PRIVY_ENABLED guard in the
