@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useAccount } from 'wagmi'
 import NetworkGuard from '@/components/NetworkGuard'
 import UsdcBalance from '@/components/UsdcBalance'
@@ -18,7 +18,8 @@ import PayeeConfirmedPage from '@/pages/PayeeConfirmedPage'
 import { EARMARK_CHAIN, EARMARK_ADDRESS } from '@/earmarkConfig'
 import { PRIVY_ENABLED } from '@/lib/privy'
 import { useEffectiveTheme } from '@/lib/theme'
-import { Send, Inbox, PiggyBank } from 'lucide-react'
+import { resolveSlugToPotId, resolveSlugToReceipt, isValidSlug } from '@/lib/slugLinks'
+import { Send, Inbox, PiggyBank, Loader2 } from 'lucide-react'
 
 // ── Routes ──────────────────────────────────────────────────────────────────
 export type Page = 'home' | 'about' | 'send' | 'sent' | 'received' | 'receipt' | 'pot' | 'how' | 'wallet' | 'confirm-payee' | 'payee-confirmed'
@@ -27,10 +28,27 @@ interface Route {
   page: Page
   potId?: bigint
   paymentIndex?: number
+  /** Pending slug resolution — we know it's a slug link but haven't scanned yet */
+  slug?: string
+  slugKind?: 'pot' | 'receipt'
 }
 
 function parseRoute(): Route {
   const hash = window.location.hash.replace(/^#/, '') || window.location.pathname
+
+  // New slug routes
+  const potSlugMatch = hash.match(/^\/p\/([0-9a-fA-F]+)$/)
+  if (potSlugMatch) {
+    const slug = potSlugMatch[1].toLowerCase()
+    return isValidSlug(slug) ? { page: 'pot', slug, slugKind: 'pot' } : { page: 'home' }
+  }
+  const receiptSlugMatch = hash.match(/^\/r\/([0-9a-fA-F]+)$/)
+  if (receiptSlugMatch) {
+    const slug = receiptSlugMatch[1].toLowerCase()
+    return isValidSlug(slug) ? { page: 'receipt', slug, slugKind: 'receipt' } : { page: 'home' }
+  }
+
+  // Legacy numeric routes (keep working, don't generate)
   const receiptMatch = hash.match(/^\/receipt\/(\d+)\/(\d+)$/)
   if (receiptMatch) {
     return { page: 'receipt', potId: BigInt(receiptMatch[1]), paymentIndex: parseInt(receiptMatch[2], 10) }
@@ -39,6 +57,7 @@ function parseRoute(): Route {
   if (potMatch) {
     return { page: 'pot', potId: BigInt(potMatch[1]) }
   }
+
   if (hash === '/send')     return { page: 'send' }
   if (hash === '/sent')     return { page: 'sent' }
   if (hash === '/received') return { page: 'received' }
@@ -50,11 +69,12 @@ function parseRoute(): Route {
   return { page: 'home' }
 }
 
-function routeToHash(page: Page, potId?: bigint, paymentIndex?: number): string {
+function routeToHash(page: Page, potId?: bigint, paymentIndex?: number, slug?: string): string {
+  if (page === 'receipt' && slug) return `#/r/${slug}`
   if (page === 'receipt' && potId !== undefined && paymentIndex !== undefined)
-    return `#/receipt/${potId}/${paymentIndex}`
-  if (page === 'pot' && potId !== undefined)
-    return `#/pot/${potId}`
+    return `#/r/` // shouldn't happen — always pass slug when known
+  if (page === 'pot' && slug) return `#/p/${slug}`
+  if (page === 'pot' && potId !== undefined) return `#/pot/${potId}` // legacy fallback
   if (page === 'send')     return '#/send'
   if (page === 'sent')     return '#/sent'
   if (page === 'received') return '#/received'
@@ -78,19 +98,67 @@ const PUBLIC_PAGES: Page[] = ['pot', 'receipt', 'wallet']
 // Pages that are standalone (no shell, no site header)
 const STANDALONE_PAGES: Page[] = ['confirm-payee', 'payee-confirmed']
 
+/** Slug-resolution states: 'resolving' | 'not-found' | undefined (resolved) */
+type SlugState = 'resolving' | 'not-found' | undefined
+
 export default function App() {
   const [route, setRoute] = useState<Route>(parseRoute)
+  const [slugState, setSlugState] = useState<SlugState>(
+    route.slug ? 'resolving' : undefined
+  )
   const { isConnected } = useAccount()
   const effectiveTheme = useEffectiveTheme()
+  const resolvingSlug = useRef<string | undefined>()
 
-  function navigate(page: Page, potId?: bigint, paymentIndex?: number) {
-    const r: Route = { page, potId, paymentIndex }
+  function navigate(page: Page, potId?: bigint, paymentIndex?: number, slug?: string) {
+    const r: Route = { page, potId, paymentIndex, slug }
     setRoute(r)
-    window.history.pushState(null, '', routeToHash(page, potId, paymentIndex))
+    setSlugState(undefined)
+    window.history.pushState(null, '', routeToHash(page, potId, paymentIndex, slug))
   }
 
+  // Keep slugState in sync: if the route has no slug and no pending resolution, clear it
+  const hasSlugPending = !!route.slug && route.potId === undefined
   useEffect(() => {
-    const handler = () => setRoute(parseRoute())
+    if (!hasSlugPending) setSlugState(undefined)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasSlugPending])
+
+  // Resolve slug → potId / receipt whenever route has a pending slug
+  useEffect(() => {
+    if (!route.slug || route.potId !== undefined) return
+    if (resolvingSlug.current === route.slug) return
+    resolvingSlug.current = route.slug
+    setSlugState('resolving')
+
+    void (async () => {
+      if (route.slugKind === 'pot') {
+        const potId = await resolveSlugToPotId(route.slug!)
+        if (potId !== null) {
+          setRoute((r) => ({ ...r, potId, slug: route.slug }))
+          setSlugState(undefined)
+        } else {
+          setSlugState('not-found')
+        }
+      } else {
+        const result = await resolveSlugToReceipt(route.slug!)
+        if (result) {
+          setRoute((r) => ({ ...r, potId: result.potId, paymentIndex: result.paymentIndex, slug: route.slug }))
+          setSlugState(undefined)
+        } else {
+          setSlugState('not-found')
+        }
+      }
+    })()
+  }, [route.slug, route.slugKind, route.potId])
+
+  useEffect(() => {
+    const handler = () => {
+      const r = parseRoute()
+      setRoute(r)
+      setSlugState(r.slug ? 'resolving' : undefined)
+      resolvingSlug.current = undefined
+    }
     window.addEventListener('popstate', handler)
     return () => window.removeEventListener('popstate', handler)
   }, [])
@@ -234,18 +302,38 @@ export default function App() {
       {route.page === 'received' && (
         <ForMePage onViewPot={(potId) => navigate('pot', potId)} />
       )}
-      {route.page === 'receipt' && route.potId !== undefined && route.paymentIndex !== undefined && (
+      {/* Slug resolving spinner */}
+      {(route.page === 'pot' || route.page === 'receipt') && slugState === 'resolving' && (
+        <div className="flex min-h-[60vh] flex-col items-center justify-center gap-3">
+          <Loader2 className="size-8 animate-spin text-[var(--muted)]" />
+          <p className="text-sm text-[var(--muted)]">Loading…</p>
+        </div>
+      )}
+      {/* Slug not found */}
+      {(route.page === 'pot' || route.page === 'receipt') && slugState === 'not-found' && (
+        <div className="mx-auto max-w-content px-4 pt-16 text-center">
+          <p className="text-sm font-semibold text-[var(--ink)]">This link doesn't match any pot on this network.</p>
+          <p className="mt-1 text-xs text-[var(--muted)]">The link may be for a different network, or no pot was created with it.</p>
+          <button
+            className="mt-4 text-sm font-medium text-[var(--accent)] hover:underline focus-visible:outline-2 focus-visible:outline-[var(--focus)] rounded"
+            onClick={() => navigate('home')}
+          >
+            Go home
+          </button>
+        </div>
+      )}
+      {route.page === 'receipt' && route.potId !== undefined && route.paymentIndex !== undefined && slugState === undefined && (
         <ReceiptPage
           potId={route.potId}
           paymentIndex={route.paymentIndex}
           onBack={() => window.history.back()}
         />
       )}
-      {route.page === 'pot' && route.potId !== undefined && (
+      {route.page === 'pot' && route.potId !== undefined && slugState === undefined && (
         <PotPage
           potId={route.potId}
           onBack={() => window.history.back()}
-          onReceipt={(potId, index) => navigate('receipt', potId, index)}
+          onReceipt={(potId, index, slug) => navigate('receipt', potId, index, slug)}
         />
       )}
       {route.page === 'wallet' && (

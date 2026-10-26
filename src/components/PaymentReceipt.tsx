@@ -18,12 +18,15 @@ interface Props {
   potId: bigint
   payees: PayeeEntry[]
   txHash?: string
+  /** 12-char slug derived from the Paid tx hash — used for the share link */
+  slug?: string
   onReceipt?: (potId: bigint, index: number) => void
 }
 
-export default function PaymentReceipt({ payment, index, potId, payees, txHash, onReceipt }: Props) {
+export default function PaymentReceipt({ payment, index, potId, payees, txHash, slug, onReceipt }: Props) {
   const payeeEntry = payees.find((p) => p.address.toLowerCase() === payment.payee.toLowerCase())
-  const receiptHref = `#/receipt/${potId}/${index}`
+  // Prefer slug link; fall back to legacy numeric for existing links
+  const receiptHref = slug ? `#/r/${slug}` : `#/receipt/${potId}/${index}`
 
   return (
     <div className="rounded-card border border-[var(--line)] bg-[var(--surface-2)] p-4 space-y-2">

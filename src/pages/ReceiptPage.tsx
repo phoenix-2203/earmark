@@ -10,6 +10,7 @@ import {
 import { useState, useCallback } from 'react'
 import { usePot, usePayments, usePayees } from '@/hooks/useEarmark'
 import { usePaidEventTxHash } from '@/hooks/useEventTxHash'
+import { hashToSlug } from '@/lib/slugLinks'
 import { EARMARK_CHAIN } from '@/earmarkConfig'
 import { formatUsdc, shortAddr, formatDateTime } from '@/utils/format'
 import { downloadReceiptPng, receiptPngFile } from '@/utils/receiptCanvas'
@@ -48,7 +49,11 @@ export default function ReceiptPage({ potId, paymentIndex, onBack }: Props) {
 
   /* ── helpers ─────────────────────────────────────────────────────────── */
 
-  const receiptUrl = `${window.location.origin}/#/receipt/${potId}/${paymentIndex}`
+  const receiptSlug = txHash ? hashToSlug(txHash) : undefined
+  // Use slug link when available; fall back to numeric for loading state
+  const receiptUrl = receiptSlug
+    ? `${window.location.origin}/#/r/${receiptSlug}`
+    : `${window.location.origin}/#/receipt/${potId}/${paymentIndex}`
   const filename   = `earmark-receipt-pot${potId}-${paymentIndex}.png`
 
   function handleCopyLink() {

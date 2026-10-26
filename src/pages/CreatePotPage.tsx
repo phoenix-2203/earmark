@@ -40,6 +40,7 @@ import { normaliseDomain } from '@/lib/verifyPayee'
 import type { PayeeWalletResponse } from '@/lib/emailPayee'
 import { PRIVY_ENABLED, usePayingWith } from '@/lib/privy'
 import { useTxSender, TxError } from '@/lib/txSender'
+import { hashToSlug } from '@/lib/slugLinks'
 
 const CATEGORY_ICONS_COMP = [GraduationCap, House, HeartPulse, Briefcase, Layers]
 
@@ -348,7 +349,10 @@ export default function CreatePotPage({ onBack, onSuccess }: Props) {
 
   // ── Success state ──
   if (txPhase === 'done' && step === 'tx') {
-    const potUrl = `${window.location.origin}/#/pot/${createdPotId ?? ''}`
+    const potSlug = txHash ? hashToSlug(txHash) : undefined
+    const potUrl = potSlug
+      ? `${window.location.origin}/#/p/${potSlug}`
+      : `${window.location.origin}/#/pot/${createdPotId ?? ''}`
     return (
       <main className="mx-auto max-w-content px-4 pb-32 pt-6 md:pb-16">
         <Card padding="lg" className="text-center space-y-4">

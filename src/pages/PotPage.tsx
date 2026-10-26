@@ -25,6 +25,7 @@ import {
 import { usePot, usePayees, usePayments, usePayeeRequests } from '@/hooks/useEarmark'
 import { useContractAction } from '@/hooks/useContractAction'
 import { usePotCreatedTxHash, usePaidEventTxHash } from '@/hooks/useEventTxHash'
+import { hashToSlug } from '@/lib/slugLinks'
 import CategoryBadge from '@/components/CategoryBadge'
 import PotProgress from '@/components/PotProgress'
 import PaymentReceipt from '@/components/PaymentReceipt'
@@ -66,7 +67,7 @@ function PayingWithLine() {
 interface Props {
   potId: bigint
   onBack: () => void
-  onReceipt: (potId: bigint, index: number) => void
+  onReceipt: (potId: bigint, index: number, slug?: string) => void
 }
 
 function potStatus(pot: Pot): Status {
@@ -76,8 +77,7 @@ function potStatus(pot: Pot): Status {
 }
 
 // ── PotCreated tx hash for "Created in transaction…" ─────────────────────────
-function CreatedTxLink({ potId }: { potId: bigint }) {
-  const { txHash } = usePotCreatedTxHash(potId)
+function CreatedTxLink({ txHash }: { txHash?: string | null }) {
   if (!txHash) return null
   return (
     <a
@@ -94,9 +94,10 @@ function CreatedTxLink({ potId }: { potId: bigint }) {
 
 // ── Paid event tx hash per payment ────────────────────────────────────────────
 function PaidReceiptRow({ potId, index, payment, payees, onReceipt }: {
-  potId: bigint; index: number; payment: { payee: `0x${string}`; amount: bigint; memo: string; timestamp: bigint; payer: `0x${string}` }; payees: PayeeEntry[]; onReceipt: (potId: bigint, i: number) => void
+  potId: bigint; index: number; payment: { payee: `0x${string}`; amount: bigint; memo: string; timestamp: bigint; payer: `0x${string}` }; payees: PayeeEntry[]; onReceipt: (potId: bigint, i: number, slug?: string) => void
 }) {
   const { txHash } = usePaidEventTxHash(potId, index)
+  const slug = txHash ? hashToSlug(txHash) : undefined
   return (
     <PaymentReceipt
       payment={payment}
@@ -104,7 +105,8 @@ function PaidReceiptRow({ potId, index, payment, payees, onReceipt }: {
       potId={potId}
       payees={payees}
       txHash={txHash ?? undefined}
-      onReceipt={onReceipt}
+      slug={slug}
+      onReceipt={(pid, i) => onReceipt(pid, i, slug)}
     />
   )
 }
@@ -117,6 +119,7 @@ export default function PotPage({ potId, onBack, onReceipt }: Props) {
   const { data: payments, isLoading: paymentsLoading, refetch: refetchPayments } = usePayments(potId)
   const { data: requests, isLoading: _requestsLoading, refetch: refetchRequests } = usePayeeRequests(potId)
   const [copied, setCopied] = useState(false)
+  const { txHash: createdTxHash } = usePotCreatedTxHash(potId)
 
   const pot = potRaw
 
@@ -131,9 +134,14 @@ export default function PotPage({ potId, onBack, onReceipt }: Props) {
   const expired = pot ? isExpired(pot.expiry) : false
   const status = pot ? potStatus(pot) : 'Open'
 
+  // Prefer slug link; fall back to numeric if tx hash not yet resolved
+  const potSlug = createdTxHash ? hashToSlug(createdTxHash) : undefined
+  const potShareUrl = potSlug
+    ? `${window.location.origin}/#/p/${potSlug}`
+    : `${window.location.origin}/#/pot/${potId}`
+
   function handleShare() {
-    const url = `${window.location.origin}/#/pot/${potId}`
-    void navigator.clipboard.writeText(url).then(() => {
+    void navigator.clipboard.writeText(potShareUrl).then(() => {
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
     })
@@ -253,7 +261,7 @@ export default function PotPage({ potId, onBack, onReceipt }: Props) {
             {shortAddr(EARMARK_ADDRESS)} <ExternalLink className="size-3" aria-hidden />
           </a>
         </div>
-        <CreatedTxLink potId={potId} />
+        <CreatedTxLink txHash={createdTxHash} />
       </Card>
 
       {/* ── Sender management panel ── */}
