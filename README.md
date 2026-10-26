@@ -129,6 +129,33 @@ Payees without any of these show "Not verified", and you can still pay them. Ban
 
 ---
 
+### Check it yourself, no wallet needed
+
+Anyone can read the contract straight from Arc mainnet, with [Foundry](https://getfoundry.sh)'s `cast` or on the explorer's **Read contract** tab:
+
+```bash
+RPC=https://rpc.mainnet.arc.io
+EARMARK=0x0dD4101D457679AE8C942f56f91F7B1eEC1aEa5B
+
+cast call $EARMARK "potCount()(uint256)" --rpc-url $RPC                       # how many pots exist
+cast call $EARMARK "getPayees(uint256)(address[],string[])" 1 --rpc-url $RPC  # who pot #1 may pay
+cast call $EARMARK "getPayments(uint256)((address,uint256,string,uint256,address)[])" 1 --rpc-url $RPC  # every payment from pot #1
+cast call $EARMARK "getPot(uint256)((uint256,address,address,string,uint8,uint256,uint256,uint256,uint256,bool))" 1 --rpc-url $RPC  # funder, recipient, balance, end date
+```
+
+**Try to break the rule.** Simulate the recipient paying an address that isn't approved (no wallet, nothing is sent):
+
+```bash
+RECIPIENT=0x…   # the recipient address from getPot above
+cast call $EARMARK "pay(uint256,address,uint256,string)" 1 0x000000000000000000000000000000000000dEaD 100000 "test" \
+  --from $RECIPIENT --rpc-url $RPC
+# → execution reverted: custom error 0x9f1e1093  = PayeeNotApproved(0x…dEaD)
+```
+
+The same happens if the recipient tries to pay their own wallet. The contract refuses, whoever asks.
+
+---
+
 ## How it's built
 
 ```
