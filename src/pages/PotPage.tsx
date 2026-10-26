@@ -367,6 +367,27 @@ function SenderPanel({ pot, potId, payees, requests, pendingCount, onRefetchPaye
   const [releaseDialog, setReleaseDialog] = useState(false)
   const [reclaimDialog, setReclaimDialog] = useState(false)
 
+  // Release/Reclaim actions live here so the dialog closes BEFORE the wallet prompt.
+  // This prevents our <dialog> from sitting above Privy's approval modal and blocking it.
+  const releaseAction = useContractAction()
+  const reclaimAction = useContractAction()
+
+  function handleReleaseConfirm() {
+    setReleaseDialog(false)            // close first
+    void releaseAction.execute({
+      contractCall: { address: EARMARK_ADDRESS, abi: EARMARK_ABI, functionName: 'releaseToBeneficiary', args: [potId], chainId: EARMARK_CHAIN_ID },
+      onSuccess: () => { toast.success('Released to recipient!'); onRefetchPot() },
+    })
+  }
+
+  function handleReclaimConfirm() {
+    setReclaimDialog(false)            // close first
+    void reclaimAction.execute({
+      contractCall: { address: EARMARK_ADDRESS, abi: EARMARK_ABI, functionName: 'reclaim', args: [potId], chainId: EARMARK_CHAIN_ID },
+      onSuccess: () => { toast.success('Reclaimed!'); onRefetchPot() },
+    })
+  }
+
   return (
     <Card padding="md" className="mb-4 space-y-4 border-[var(--accent-soft)] bg-[var(--accent-soft)]">
       <h2 className="text-xs font-semibold uppercase tracking-widest text-[var(--accent)]">Funder actions</h2>
@@ -396,11 +417,19 @@ function SenderPanel({ pot, potId, payees, requests, pendingCount, onRefetchPaye
             <Button variant="secondary" size="sm" onClick={() => setShowExtend((v) => !v)}>
               <CalendarClock className="size-3.5" aria-hidden /> Extend end date
             </Button>
-            <Button variant="secondary" size="sm" onClick={() => setReleaseDialog(true)}>
+            <Button
+              variant="secondary" size="sm"
+              disabled={releaseAction.isBusy}
+              onClick={() => { releaseAction.reset(); setReleaseDialog(true) }}
+            >
               <Gift className="size-3.5" aria-hidden /> Release the rest to recipient
             </Button>
             {expired && (
-              <Button variant="danger" size="sm" onClick={() => setReclaimDialog(true)}>
+              <Button
+                variant="danger" size="sm"
+                disabled={reclaimAction.isBusy}
+                onClick={() => { reclaimAction.reset(); setReclaimDialog(true) }}
+              >
                 <Undo2 className="size-3.5" aria-hidden /> Take back unspent money
               </Button>
             )}
@@ -410,6 +439,20 @@ function SenderPanel({ pot, potId, payees, requests, pendingCount, onRefetchPaye
               </p>
             )}
           </div>
+
+          {/* Release/Reclaim TxStatus shown in the card (not inside the dialog) */}
+          {(releaseAction.isBusy || releaseAction.state === 'confirmed' || releaseAction.state === 'failed') && (
+            <div className="space-y-1">
+              {releaseAction.errorMessage && <p role="alert" className="text-xs text-danger">{releaseAction.errorMessage}</p>}
+              <TxStatus state={releaseAction.state} txHash={releaseAction.txHash} errorDetail={releaseAction.errorDetail} />
+            </div>
+          )}
+          {(reclaimAction.isBusy || reclaimAction.state === 'confirmed' || reclaimAction.state === 'failed') && (
+            <div className="space-y-1">
+              {reclaimAction.errorMessage && <p role="alert" className="text-xs text-danger">{reclaimAction.errorMessage}</p>}
+              <TxStatus state={reclaimAction.state} txHash={reclaimAction.txHash} errorDetail={reclaimAction.errorDetail} />
+            </div>
+          )}
 
           {showTopUp && <TopUpForm potId={potId} onDone={() => { setShowTopUp(false); onRefetchPot() }} />}
           {showAddPayee && <AddPayeeForm potId={potId} pot={pot} payees={payees} onDone={() => { setShowAddPayee(false); onRefetchPayees() }} />}
@@ -446,13 +489,19 @@ function SenderPanel({ pot, potId, payees, requests, pendingCount, onRefetchPaye
         </>
       )}
 
+      {/* Confirm-only dialogs — no transaction happens inside them */}
       <Dialog open={releaseDialog} onClose={() => setReleaseDialog(false)} title="Release the rest to recipient">
         <div className="space-y-4">
           <p className="text-sm text-[var(--ink-2)]">
             <strong className="font-mono tabular-nums">{formatUsdc(pot.balance)} USDC</strong> will be released to the recipient with no restrictions.
             The pot closes. <strong>This can't be undone.</strong>
           </p>
-          <ReleaseAction potId={potId} onDone={() => { setReleaseDialog(false); onRefetchPot() }} />
+          <div className="flex gap-2">
+            <Button size="sm" className="flex-1 bg-[var(--success)] hover:opacity-90" onClick={handleReleaseConfirm}>
+              <Gift className="size-4" aria-hidden /> Release
+            </Button>
+            <Button variant="secondary" size="sm" onClick={() => setReleaseDialog(false)}>Cancel</Button>
+          </div>
         </div>
       </Dialog>
 
@@ -462,7 +511,12 @@ function SenderPanel({ pot, potId, payees, requests, pendingCount, onRefetchPaye
             Reclaim <strong className="font-mono tabular-nums">{formatUsdc(pot.balance)} USDC</strong> to your wallet.
             The pot closes. <strong>This can't be undone.</strong>
           </p>
-          <ReclaimAction potId={potId} onDone={() => { setReclaimDialog(false); onRefetchPot() }} />
+          <div className="flex gap-2">
+            <Button variant="danger" size="sm" className="flex-1" onClick={handleReclaimConfirm}>
+              <Undo2 className="size-4" aria-hidden /> Take back
+            </Button>
+            <Button variant="secondary" size="sm" onClick={() => setReclaimDialog(false)}>Cancel</Button>
+          </div>
         </div>
       </Dialog>
     </Card>
@@ -747,58 +801,56 @@ function RemovePayeeRow({ potId, payee, onRemoved }: { potId: bigint; payee: Pay
   const [confirmOpen, setConfirmOpen] = useState(false)
   const action = useContractAction()
 
+  // Close-first pattern: dialog closes before wallet prompt so Privy modal isn't blocked
   function handleConfirm() {
+    setConfirmOpen(false)
     void action.execute({
       contractCall: {
         address: EARMARK_ADDRESS, abi: EARMARK_ABI, functionName: 'removePayee',
         args: [potId, payee.address], chainId: EARMARK_CHAIN_ID,
       },
-      onSuccess: () => {
-        setConfirmOpen(false)
-        onRemoved()
-      },
+      onSuccess: onRemoved,
     })
   }
 
   const parsedPayee = parseLabel(payee.label)
   return (
-    <li className="flex items-center justify-between rounded-input bg-[var(--surface)] px-3 py-2">
-      <div>
-        <p className="text-xs font-semibold text-[var(--ink)]">{parsedPayee.name}</p>
-        <AddressChip address={payee.address} />
+    <li className="space-y-1">
+      <div className="flex items-center justify-between rounded-input bg-[var(--surface)] px-3 py-2">
+        <div>
+          <p className="text-xs font-semibold text-[var(--ink)]">{parsedPayee.name}</p>
+          <AddressChip address={payee.address} />
+        </div>
+        <Button
+          variant="danger"
+          size="sm"
+          loading={action.isBusy}
+          aria-label={`Remove ${parsedPayee.name}`}
+          onClick={() => { action.reset(); setConfirmOpen(true) }}
+        >
+          <X className="size-3.5" aria-hidden />
+        </Button>
       </div>
-      <Button
-        variant="danger"
-        size="sm"
-        loading={action.isBusy}
-        aria-label={`Remove ${parsedPayee.name}`}
-        onClick={() => { action.reset(); setConfirmOpen(true) }}
-      >
-        <X className="size-3.5" aria-hidden />
-      </Button>
 
-      <Dialog open={confirmOpen} onClose={() => { setConfirmOpen(false); action.reset() }} title="Remove payee">
+      {/* TxStatus shown in the row (not inside the dialog) */}
+      {(action.isBusy || action.state === 'confirmed' || action.state === 'failed') && (
+        <div className="space-y-1 px-1">
+          {action.errorMessage && <p role="alert" className="text-xs text-danger">{action.errorMessage}</p>}
+          <TxStatus state={action.state} txHash={action.txHash} errorDetail={action.errorDetail} />
+        </div>
+      )}
+
+      <Dialog open={confirmOpen} onClose={() => setConfirmOpen(false)} title="Remove payee">
         <div className="space-y-4">
           <p className="text-sm text-[var(--ink-2)]">
             Remove <strong>{parsedPayee.name}</strong>? The recipient won't be able to pay this address from this pot.
           </p>
           <p className="font-mono text-xs text-[var(--muted)] break-all">{payee.address}</p>
-          {action.errorMessage && (
-            <p role="alert" className="text-xs text-danger">{action.errorMessage}</p>
-          )}
-          {action.txHash && <TxStatus state={action.state} txHash={action.txHash} errorDetail={action.errorDetail} />}
           <div className="flex gap-2">
-            <Button
-              variant="danger"
-              size="sm"
-              className="flex-1"
-              loading={action.isBusy}
-              loadingLabel="Removing…"
-              onClick={handleConfirm}
-            >
+            <Button variant="danger" size="sm" className="flex-1" onClick={handleConfirm}>
               Remove payee
             </Button>
-            <Button variant="secondary" size="sm" onClick={() => { setConfirmOpen(false); action.reset() }}>Cancel</Button>
+            <Button variant="secondary" size="sm" onClick={() => setConfirmOpen(false)}>Cancel</Button>
           </div>
         </div>
       </Dialog>
@@ -958,58 +1010,7 @@ function ExtendForm({ potId, currentExpiry, onDone }: { potId: bigint; currentEx
   )
 }
 
-// ── ReleaseAction ─────────────────────────────────────────────────────────────
-function ReleaseAction({ potId, onDone }: { potId: bigint; onDone: () => void }) {
-  const action = useContractAction()
-  useEffect(() => {
-    if (action.state === 'confirmed') { toast.success('Released to recipient!'); onDone() }
-  }, [action.state, onDone])
-  return (
-    <div className="space-y-3">
-      {action.errorMessage && <p role="alert" className="text-xs text-danger">{action.errorMessage}</p>}
-      {action.txHash && <TxStatus state={action.state} txHash={action.txHash} errorDetail={action.errorDetail} />}
-      <Button
-        size="sm"
-        className="w-full bg-[var(--success)] hover:opacity-90"
-        loading={action.isBusy}
-        loadingLabel="Releasing…"
-        onClick={() => void action.execute({
-          contractCall: { address: EARMARK_ADDRESS, abi: EARMARK_ABI, functionName: 'releaseToBeneficiary', args: [potId], chainId: EARMARK_CHAIN_ID },
-          onSuccess: onDone,
-        })}
-      >
-        <Gift className="size-4" aria-hidden /> Release the rest to recipient
-      </Button>
-    </div>
-  )
-}
-
-// ── ReclaimAction ─────────────────────────────────────────────────────────────
-function ReclaimAction({ potId, onDone }: { potId: bigint; onDone: () => void }) {
-  const action = useContractAction()
-  useEffect(() => {
-    if (action.state === 'confirmed') { toast.success('Reclaimed!'); onDone() }
-  }, [action.state, onDone])
-  return (
-    <div className="space-y-3">
-      {action.errorMessage && <p role="alert" className="text-xs text-danger">{action.errorMessage}</p>}
-      {action.txHash && <TxStatus state={action.state} txHash={action.txHash} errorDetail={action.errorDetail} />}
-      <Button
-        variant="danger"
-        size="sm"
-        className="w-full"
-        loading={action.isBusy}
-        loadingLabel="Reclaiming…"
-        onClick={() => void action.execute({
-          contractCall: { address: EARMARK_ADDRESS, abi: EARMARK_ABI, functionName: 'reclaim', args: [potId], chainId: EARMARK_CHAIN_ID },
-          onSuccess: onDone,
-        })}
-      >
-        <Undo2 className="size-4" aria-hidden /> Take back unspent money
-      </Button>
-    </div>
-  )
-}
+// ReleaseAction and ReclaimAction were merged into SenderPanel (close-first pattern)
 
 // ── PayForm ───────────────────────────────────────────────────────────────────
 function PayForm({ potId, payees, balance, onDone }: { potId: bigint; payees: PayeeEntry[]; balance: bigint; onDone: () => void }) {

@@ -6,14 +6,14 @@ interface DialogProps {
   onClose: () => void
   title: string
   children: ReactNode
+  /** While busy, backdrop clicks and Esc are ignored and the close button is disabled. */
+  busy?: boolean
 }
 
 let dialogCounter = 0
 
-export function Dialog({ open, onClose, title, children }: DialogProps) {
+export function Dialog({ open, onClose, title, children, busy = false }: DialogProps) {
   const dialogRef = useRef<HTMLDialogElement>(null)
-  // useState with a lazy initialiser runs only once and never re-runs,
-  // giving a stable ID without touching a ref during render.
   const [titleId] = useState(() => `dialog-title-${++dialogCounter}`)
 
   useEffect(() => {
@@ -26,26 +26,30 @@ export function Dialog({ open, onClose, title, children }: DialogProps) {
     }
   }, [open])
 
-  // Close on backdrop click
+  // Close on backdrop click — ignored while busy
   function handleClick(e: React.MouseEvent<HTMLDialogElement>) {
+    if (busy) return
     const rect = dialogRef.current?.getBoundingClientRect()
     if (!rect) return
     if (
       e.clientX < rect.left || e.clientX > rect.right ||
-      e.clientY < rect.top || e.clientY > rect.bottom
+      e.clientY < rect.top  || e.clientY > rect.bottom
     ) {
       onClose()
     }
   }
 
-  // Close on Esc (native dialog handles this, but we sync state)
+  // Close on Esc (native dialog fires 'cancel') — ignored while busy
   useEffect(() => {
     const el = dialogRef.current
     if (!el) return
-    const handler = () => onClose()
+    function handler(e: Event) {
+      if (busy) { e.preventDefault(); return }
+      onClose()
+    }
     el.addEventListener('cancel', handler)
     return () => el.removeEventListener('cancel', handler)
-  }, [onClose])
+  }, [onClose, busy])
 
   if (!open) return null
 
@@ -61,9 +65,10 @@ export function Dialog({ open, onClose, title, children }: DialogProps) {
         <h2 id={titleId} className="text-base font-semibold text-[var(--ink)]">{title}</h2>
         <button
           type="button"
-          onClick={onClose}
+          onClick={busy ? undefined : onClose}
+          disabled={busy}
           aria-label="Close dialog"
-          className="rounded p-1 text-[var(--muted)] hover:text-[var(--ink)] focus-visible:outline-2 focus-visible:outline-[var(--focus)] min-w-[32px] min-h-[32px] flex items-center justify-center"
+          className="rounded p-1 text-[var(--muted)] hover:text-[var(--ink)] focus-visible:outline-2 focus-visible:outline-[var(--focus)] min-w-[32px] min-h-[32px] flex items-center justify-center disabled:opacity-40 disabled:cursor-not-allowed"
         >
           <X className="size-4" aria-hidden />
         </button>
