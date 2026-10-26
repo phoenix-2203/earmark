@@ -1,8 +1,22 @@
-# Earmark
+<p><img src="public/earmark-logo.svg" alt="Earmark" height="44"></p>
 
 **Money with a purpose.** Give someone money that can only be spent on what it was meant for.
 
 **Live app:** https://arcearmark.duckdns.org · **Network:** Arc mainnet · **Built with [Arc Studio](https://studio.arc.io)**
+
+## At a glance
+
+| | |
+|---|---|
+| **What it is** | Purpose-bound USDC pots: the funder decides who can be paid, the recipient decides when and how much, the contract enforces it |
+| **Network** | Arc mainnet (chain 5042), USDC as money and as gas |
+| **Contract** | `Earmark.sol`: no owner, no admin key, no upgrades, no fees ([`0x0dD4…Ea5B`](https://explorer.arc.io/address/0x0dD4101D457679AE8C942f56f91F7B1eEC1aEa5B)) |
+| **Sign-in** | Google or email (a wallet is created for you), or your own wallet |
+| **Pay by email** | Type an email: Earmark finds or creates that person's wallet, even before they join |
+| **Real payees** | Verified by the payee's own website, or confirmed by the payee signing a link you sent them |
+| **Receipts** | A public page and a downloadable image with a QR code for every payment |
+| **Tests** | 61 contract tests (Foundry) and 145 app tests |
+| **Review** | Internal only, not a professional audit. Use small amounts |
 
 ![How Earmark works](how-earmark-works.svg)
 
@@ -57,13 +71,34 @@ In every case, the person spending the money can't send it to themselves or anyo
 4. **Anyone can verify.** Each payment has a public receipt page with a QR code, plus a downloadable receipt image, linked to the transaction on the Arc explorer.
 5. **Leftovers.** After the end date the funder can take back what's unspent. At any time, the funder can choose to release the rest to the recipient with no restrictions.
 
+### Sign in with Google, pay by email
+
+You don't need a crypto wallet to use Earmark.
+
+- **Sign in with Google or your email.** Earmark creates a wallet for you (an embedded wallet run by [Privy](https://privy.io)). It's permanent and tied to your email. You can send USDC out to any wallet or exchange, or export the key.
+- **Pay someone by email.** Type `accounts@haldensupplies.com` in any payee or recipient field. Earmark finds that email's wallet, or creates it on the spot. When they later sign in with that email (Google or a one-time code), the money is already there. Only whoever controls that inbox can ever use it.
+- **Bring your own wallet.** MetaMask and other wallets still work. A "Paying with" switch shows which wallet signs.
+- **Fees:** on Arc, fees are paid in USDC. Payees never need fees to receive. When the recipient is new, the funder can send 0.05 USDC for their fees in the same flow.
+
+### Is this payee real?
+
+A wallet address and a name prove nothing on their own, so Earmark gives you three ways to check before you approve a payee:
+
+| Check | How it works | Badge |
+|---|---|---|
+| **Website** | The business adds one line to its domain settings: `earmark=0xTheirWallet`. Earmark reads it and shows "Verified by theirdomain.com". Free addresses (`*.duckdns.org`, `*.github.io`, …) never count | Green, or amber for free addresses |
+| **Payee confirms** | You tap "Ask payee to confirm" and send the link using contact details you found yourself. The payee signs a free message in their wallet and sends the link back. Only confirmations your own browser asked for are accepted | Green: "Confirmed by the wallet owner" |
+| **Email** | The wallet belongs to an email address. A company email (`name@theircompany.com`) is strong; a personal one (Gmail etc.) gets a warning, because anyone can create those | Green for company email, amber for personal |
+
+Payees without any of these show "Not verified", and you can still pay them. Banks give the same advice: confirm new payment details through a channel you already trust.
+
 ### Roles
 
 | Role | Can | Can't |
 |---|---|---|
 | **Funder** | Create and fund pots, pay approved payees too, add or remove payees, approve or reject payee requests, top up, extend the end date, release the rest, take back unspent money after the end date | Be a payee of their own pot |
 | **Recipient** | Pay approved payees, ask for new payees | Pay themselves, pay anyone not approved, withdraw the money |
-| **Approved payee** | Receive payments | Nothing else; no account needed, just a wallet address |
+| **Approved payee** | Receive payments; optionally confirm their wallet or verify it with their website | Nothing else; no account needed, just a wallet address or an email |
 
 ### What the contract guarantees, and what it doesn't
 
@@ -74,7 +109,7 @@ In every case, the person spending the money can't send it to themselves or anyo
 - Unspent money returns to the funder after the end date.
 
 **Not guaranteed:**
-- Earmark can't verify **who owns** an address. Get a supplier's wallet address from the supplier directly.
+- The contract itself can't know **who owns** an address. The app's checks (website, payee confirmation, email) are evidence, not proof: you still have to be sure the website, contact or email is really the payee's.
 - Payments can't be reversed.
 - Only USDC on Arc is supported.
 
@@ -94,9 +129,24 @@ In every case, the person spending the money can't send it to themselves or anyo
 
 ---
 
+## How it's built
+
+```
+Browser (React app)  ── reads/writes ──▶  Earmark contract on Arc (holds the pots, enforces the rules)
+   │  sign-in, embedded wallets ─────────▶  Privy
+   │  "pay by email" lookups ────────────▶  Earmark API (server/earmark-api.mjs) ──▶ Privy
+   │  website verification ──────────────▶  public DNS (Cloudflare / Google DNS-over-HTTPS)
+```
+
+- **The money never touches a server.** Pots live in the contract; every transfer is signed by the user's own wallet.
+- **Earmark API** (`server/`): one endpoint that finds or creates the wallet for an email. Zero dependencies, checks the caller's Privy sign-in (ES256, key rotation supported), and limits use to 60 lookups an hour and 20 new wallets a day per user. It never logs secrets or email addresses.
+- **No database.** Payee confirmations are signed messages kept in the funder's own browser; website checks read public DNS.
+
+---
+
 ## Built with Arc Studio
 
-Earmark was designed and built in **Arc Studio**: the Solidity contract, its 61 Foundry tests, the security review, the React app and the testnet deployment were all written and iterated there, then pushed to this repository. The mainnet contract is the same `contracts/Earmark.sol`, deployed with Foundry.
+Earmark was designed and built in **Arc Studio**: the Solidity contract and its 61 Foundry tests, the security review, the React app (sign-in, pay by email, payee verification, receipts, dark mode), the Earmark API and the app tests were all written and iterated there, then pushed to this repository commit by commit. The mainnet contract is the same `contracts/Earmark.sol`, deployed with Foundry.
 
 ---
 
@@ -114,7 +164,12 @@ Configure the network with environment variables:
 VITE_NETWORK=mainnet                                              # or testnet
 VITE_EARMARK_ADDRESS=0x0dD4101D457679AE8C942f56f91F7B1eEC1aEa5B
 VITE_EARMARK_FROM_BLOCK=27249934                                  # deploy block, limits log scans
+VITE_PRIVY_APP_ID=your_privy_app_id                               # optional: enables Google/email sign-in and pay by email
 ```
+
+Without `VITE_PRIVY_APP_ID` the app works with browser wallets only.
+
+The Earmark API runs next to the site (see [`server/README.md`](server/README.md)): `node server/earmark-api.mjs` with `PRIVY_APP_ID` and `PRIVY_APP_SECRET` in its environment, served at `/api/*` on the same domain.
 
 ```bash
 bun run build                   # production build → dist/
@@ -132,16 +187,24 @@ bun run build                   # production build → dist/
 | `#/receipt/:potId/:index` | Payment receipt (public, downloadable image with QR code) |
 | `#/how` | How it works |
 | `#/about` | About |
+| `#/wallet` | My Earmark wallet (balance, send out, export key) |
+| `#/confirm-payee` | Payee confirms their wallet (from a link) |
+| `#/payee-confirmed` | Funder opens the payee's reply |
 
 ---
+
+## Not yet proven
+
+- **Independent users.** So far the pots and payments on mainnet come from wallets controlled by the builder.
+- **Scale.** The Earmark API runs on one small server with in-memory limits.
+- **A professional audit** of the contract.
 
 ## Roadmap
 
 Planned, not built yet:
 
-- **Sign in with Google**, so recipients and payees don't need to know about crypto wallets.
-- **Fee sponsorship**, so new users can pay with 0 USDC in their wallet.
-- **A shareable recipient ID** instead of long wallet addresses.
+- **Pay by X (Twitter) handle**, for people who signed in with X.
+- **Fee sponsorship**, so new users can act with 0 USDC in their wallet.
 - **Top-ups straight from an exchange.**
 - **Cash-out to local currency** for suppliers, landlords and institutions.
 
