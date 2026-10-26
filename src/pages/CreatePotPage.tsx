@@ -28,6 +28,7 @@ import { Button } from '@/components/ui/Button'
 import { Field } from '@/components/ui/Field'
 import { Card } from '@/components/ui/Card'
 import { EmailAddressInput } from '@/components/ui/EmailAddressInput'
+import { PublicDataNote } from '@/components/ui/PublicDataNote'
 import { AmountInput } from '@/components/ui/AmountInput'
 import { Stepper } from '@/components/ui/Stepper'
 import { TxStatus } from '@/components/ui/TxStatus'
@@ -543,6 +544,7 @@ export default function CreatePotPage({ onBack, onSuccess }: Props) {
               />
             )}
           </Field>
+          <PublicDataNote />
 
           <div>
             <p className="mb-2 text-xs font-medium text-[var(--ink-2)]">Category</p>
@@ -660,6 +662,7 @@ export default function CreatePotPage({ onBack, onSuccess }: Props) {
                   maxLength={48}
                   className="w-full rounded-input border border-[var(--line)] bg-[var(--surface)] px-3 py-2 text-sm text-[var(--ink)] placeholder:text-[var(--muted)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)]"
                 />
+                <PublicDataNote />
               </div>
               <div>
                 <label className="mb-1 block text-xs text-[var(--muted)]">Wallet address or email</label>

@@ -34,6 +34,7 @@ import { Card } from '@/components/ui/Card'
 import { StatusBadge } from '@/components/ui/StatusBadge'
 import { AddressChip } from '@/components/ui/AddressChip'
 import { EmailAddressInput } from '@/components/ui/EmailAddressInput'
+import { PublicDataNote } from '@/components/ui/PublicDataNote'
 import { AmountInput } from '@/components/ui/AmountInput'
 import { Field } from '@/components/ui/Field'
 import { Dialog } from '@/components/ui/Dialog'
@@ -740,6 +741,7 @@ function AddPayeeForm({ potId, pot, payees, onDone }: { potId: bigint; pot: Pot;
           placeholder="Halden Building Supplies"
           className="w-full rounded-input border border-[var(--line)] bg-[var(--surface-2)] px-3 py-2 text-sm text-[var(--ink)] placeholder:text-[var(--muted)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)]"
         />
+        <PublicDataNote />
       </div>
       <div>
         <label className="mb-1 block text-xs text-[var(--muted)]">Wallet address or email</label>
@@ -1103,6 +1105,7 @@ function PayForm({ potId, payees, balance, onDone }: { potId: bigint; payees: Pa
           placeholder="e.g. PO-1042 · materials"
           className="w-full rounded-input border border-[var(--line)] bg-[var(--surface-2)] px-3 py-2 text-sm text-[var(--ink)] placeholder:text-[var(--muted)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)]"
         />
+        <PublicDataNote />
       </div>
 
       {err && <p role="alert" className="text-xs text-danger">{err}</p>}
@@ -1206,6 +1209,7 @@ function RequestPayeeForm({ potId, pot, payees, onDone }: { potId: bigint; pot: 
           placeholder="Halden Building Supplies"
           className="w-full rounded-input border border-[var(--line)] bg-[var(--surface-2)] px-3 py-2 text-sm text-[var(--ink)] placeholder:text-[var(--muted)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)]"
         />
+        <PublicDataNote />
       </div>
       <div>
         <label className="mb-1 block text-xs text-[var(--muted)]">Wallet address or email</label>
@@ -1258,6 +1262,7 @@ function RequestPayeeForm({ potId, pot, payees, onDone }: { potId: bigint; pot: 
           placeholder="e.g. I need to pay for a checkup next week"
           className="w-full rounded-input border border-[var(--line)] bg-[var(--surface-2)] px-3 py-2 text-sm text-[var(--ink)] placeholder:text-[var(--muted)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)]"
         />
+        <PublicDataNote />
       </div>
       {err && <p role="alert" className="text-xs text-danger">{err}</p>}
       {action.txHash && <TxStatus state={action.state} txHash={action.txHash} errorDetail={action.errorDetail} />}

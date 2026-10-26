@@ -40,6 +40,10 @@ const ROADMAP = [
     title: 'Local-currency cash-out partners',
     desc: 'Payees in certain markets will be able to convert USDC receipts into local currency through integrated cash-out partners.',
   },
+  {
+    title: 'Private pots: titles, names, and memos readable only with the share link',
+    desc: "Currently all pot data is public on Arc. A future version will encrypt titles, payee labels, and payment memos so that only someone who holds the share link can read them — the contract still enforces the rules, but the details stay private.",
+  },
 ]
 
 export default function AboutPage({ onSend, onSent, onReceived, onHow, onBack }: Props) {
